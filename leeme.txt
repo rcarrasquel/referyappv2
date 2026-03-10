@@ -1,0 +1,6 @@
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=oqppbydo_myreferyapp
+DB_USERNAME=oqppbydo_myreferyapp
+DB_PASSWORD=^UaF2wZr8%W-
