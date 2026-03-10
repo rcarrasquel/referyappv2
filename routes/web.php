@@ -12,9 +12,92 @@ use App\Http\Controllers\ModuleController;
 use App\Http\Controllers\PublicCardController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProductController;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Str;
 
-Route::redirect('/', '/dashboard');
+/**
+ * Public card routes for both:
+ * - refery.app/{username}
+ * - {username}.refery.app
+ */
+$usernamePattern = '[A-Za-z0-9_-]+';
+
+$registerPublicCardRoutes = static function (bool $subdomainMode = false) use ($usernamePattern): void {
+    if ($subdomainMode) {
+        Route::get('/', [PublicCardController::class, 'showByUsername'])
+            ->where('username', $usernamePattern)
+            ->name('public.cards.subdomain.show');
+
+        Route::get('/out/{index}', [PublicCardController::class, 'outByUsername'])
+            ->where('username', $usernamePattern)
+            ->whereNumber('index')
+            ->name('public.cards.subdomain.out');
+
+        Route::get('/appointments/availability', [AppointmentController::class, 'availability'])
+            ->where('username', $usernamePattern)
+            ->name('public.cards.subdomain.appointments.availability');
+
+        Route::post('/appointments', [AppointmentController::class, 'storePublic'])
+            ->where('username', $usernamePattern)
+            ->name('public.cards.subdomain.appointments.store');
+
+        Route::post('/share-events', [PublicCardController::class, 'trackShareByUsername'])
+            ->where('username', $usernamePattern)
+            ->name('public.cards.subdomain.share-events.store');
+
+        return;
+    }
+
+    Route::get('/{username}/appointments/availability', [AppointmentController::class, 'availability'])
+        ->where('username', $usernamePattern)
+        ->name('public.cards.appointments.availability');
+
+    Route::post('/{username}/appointments', [AppointmentController::class, 'storePublic'])
+        ->where('username', $usernamePattern)
+        ->name('public.cards.appointments.store');
+
+    Route::post('/{username}/share-events', [PublicCardController::class, 'trackShareByUsername'])
+        ->where('username', $usernamePattern)
+        ->name('public.cards.share-events.store');
+
+    Route::get('/{username}/out/{index}', [PublicCardController::class, 'outByUsername'])
+        ->where('username', $usernamePattern)
+        ->whereNumber('index')
+        ->name('public.cards.username.out');
+
+    Route::get('/{username}', [PublicCardController::class, 'showByUsername'])
+        ->where('username', $usernamePattern)
+        ->name('public.cards.username.show');
+};
+
+$appHost = parse_url((string) config('app.url'), PHP_URL_HOST) ?: '';
+$appHost = preg_replace('/^www\./i', '', $appHost ?? '');
+
+if ($appHost !== '' && str_contains($appHost, '.')) {
+    Route::domain('{username}.' . $appHost)->group(static function () use ($registerPublicCardRoutes): void {
+        $registerPublicCardRoutes(true);
+    });
+}
+
+Route::get('/', function (Request $request) use ($appHost, $usernamePattern) {
+    $host = preg_replace('/^www\./i', '', strtolower($request->getHost()));
+    $normalizedAppHost = strtolower((string) $appHost);
+
+    if (
+        $normalizedAppHost !== ''
+        && $host !== $normalizedAppHost
+        && Str::endsWith($host, '.' . $normalizedAppHost)
+    ) {
+        $username = Str::before($host, '.' . $normalizedAppHost);
+
+        if ($username !== '' && preg_match('/^' . $usernamePattern . '$/', $username) === 1) {
+            return app(PublicCardController::class)->showByUsername($request, $username);
+        }
+    }
+
+    return redirect('/dashboard');
+});
 
 // Utility route for creating storage link (use only when needed, then comment out)
 Route::get('/storage-link', function () {
@@ -78,6 +161,7 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/analytics', [ModuleController::class, 'analytics'])->name('analytics');
     Route::get('/reports', [ModuleController::class, 'reports'])->name('reports');
 
+    Route::get('/signout', [AuthenticatedSessionController::class, 'destroyViaGet'])->name('signout');
     Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
 });
 
@@ -87,23 +171,4 @@ Route::middleware(['auth', 'admin'])->group(function (): void {
 
 Route::post('/locale', LocaleController::class)->name('locale.switch');
 
-Route::get('/{username}/appointments/availability', [AppointmentController::class, 'availability'])
-    ->where('username', '[A-Za-z0-9_-]+')
-    ->name('public.cards.appointments.availability');
-
-Route::post('/{username}/appointments', [AppointmentController::class, 'storePublic'])
-    ->where('username', '[A-Za-z0-9_-]+')
-    ->name('public.cards.appointments.store');
-
-Route::post('/{username}/share-events', [PublicCardController::class, 'trackShareByUsername'])
-    ->where('username', '[A-Za-z0-9_-]+')
-    ->name('public.cards.share-events.store');
-
-Route::get('/{username}/out/{index}', [PublicCardController::class, 'outByUsername'])
-    ->where('username', '[A-Za-z0-9_-]+')
-    ->whereNumber('index')
-    ->name('public.cards.username.out');
-
-Route::get('/{username}', [PublicCardController::class, 'showByUsername'])
-    ->where('username', '[A-Za-z0-9_-]+')
-    ->name('public.cards.username.show');
+$registerPublicCardRoutes();

@@ -1,9 +1,9 @@
 <template>
     <Head title="ReferyApp" />
 
-    <div class="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(109,190,69,0.2),_transparent_54%),#eef2f7] px-4 py-4 sm:px-6 md:py-8 lg:py-12">
-        <div class="mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-[560px] items-center justify-center md:min-h-[calc(100vh-4rem)] md:max-w-[590px] lg:min-h-[calc(100vh-6rem)] lg:max-w-[580px]">
-            <div ref="cardRef" class="relative flex h-[calc(100vh-2rem)] max-h-[960px] w-full flex-col overflow-hidden rounded-3xl border border-white/50 shadow-[0_28px_70px_rgba(15,23,42,0.28)] md:h-[calc(100vh-4rem)] md:max-h-none lg:h-[calc(100vh-6rem)]" :style="previewCardStyle">
+    <main class="min-h-[100dvh] bg-[radial-gradient(circle_at_top,_rgba(109,190,69,0.2),_transparent_54%),#eef2f7] px-0 py-0 md:px-6 md:py-8 lg:py-12" role="main">
+        <div class="mx-auto flex min-h-[100dvh] w-full max-w-none items-stretch justify-center md:min-h-[calc(100vh-4rem)] md:max-w-[590px] md:items-center lg:min-h-[calc(100vh-6rem)] lg:max-w-[580px]">
+            <div ref="cardRef" class="relative flex h-[100dvh] w-full flex-col overflow-hidden md:h-[calc(100vh-4rem)] md:max-h-none md:rounded-3xl md:border md:border-white/50 md:shadow-[0_28px_70px_rgba(15,23,42,0.28)] lg:h-[calc(100vh-6rem)]" :style="previewCardStyle">
                 <div ref="headerRef" class="z-0 w-full" :class="[headerShapeClass, headerHeightClass, 'md:min-h-[140px] lg:min-h-[160px]']" :style="headerStyle">
                     <svg
                         v-if="showWaveDecoration"
@@ -81,7 +81,10 @@
                         <div class="flex items-center justify-between border-b border-slate-200/50 px-5 py-4">
                             <h2 class="text-lg font-semibold text-slate-900">{{ offcanvasTitles[activeOption] }}</h2>
                             <button
+                                type="button"
                                 class="flex h-8 w-8 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100/50"
+                                aria-label="Close panel"
+                                title="Close panel"
                                 @click="closeOffcanvas"
                             >
                                 <XMarkIcon class="h-5 w-5" />
@@ -89,7 +92,7 @@
                         </div>
 
                         <!-- Offcanvas Content -->
-                        <div class="flex-1 overflow-y-auto p-5">
+                        <div class="flex-1 overflow-y-auto p-5" :class="{ 'products-scroll': activeOption === 'products' }">
                             <div v-if="activeOption === 'products'">
                                 <div v-if="sortedServices.length" class="space-y-3">
                                     <article
@@ -342,7 +345,10 @@
                     <!-- FAB Button -->
                     <button
                         ref="fabButtonRef"
+                        type="button"
                         class="flex h-14 w-14 items-center justify-center rounded-full bg-[#6DBE45] text-white shadow-2xl transition hover:bg-[#5da939] hover:shadow-3xl active:scale-95"
+                        :aria-label="isMenuOpen ? 'Close quick actions' : 'Open quick actions'"
+                        :title="isMenuOpen ? 'Close quick actions' : 'Open quick actions'"
                         @click.stop="toggleMenu"
                     >
                         <component :is="isMenuOpen ? XMarkIcon : PlusIcon" class="h-6 w-6 transition-transform" :class="isMenuOpen ? 'rotate-90' : 'rotate-0'" />
@@ -350,7 +356,7 @@
                 </div>
             </div>
         </div>
-    </div>
+    </main>
 </template>
 
 <script setup>
@@ -759,6 +765,10 @@ const getPublicLinkHref = (link, index) => {
         return special;
     }
 
+    if (isCardSubdomainContext()) {
+        return `/out/${index}`;
+    }
+
     return `/${state.username}/out/${index}`;
 };
 
@@ -924,6 +934,26 @@ const buildCurrentPublicUrl = () => {
     return `${origin}${pathname}`;
 };
 
+const isCardSubdomainContext = () => {
+    if (typeof window === 'undefined') {
+        return false;
+    }
+
+    const host = window.location.hostname.toLowerCase();
+    const username = (state.username || '').toLowerCase();
+
+    return username !== '' && host.startsWith(`${username}.`);
+};
+
+const publicEndpointPath = (suffix) => {
+    const normalizedSuffix = suffix.startsWith('/') ? suffix : `/${suffix}`;
+    if (isCardSubdomainContext()) {
+        return normalizedSuffix;
+    }
+
+    return `/${state.username}${normalizedSuffix}`;
+};
+
 const shareUrl = computed(() => qrPublicUrl.value || buildCurrentPublicUrl());
 
 const escapeVCardValue = (value) => String(value ?? '')
@@ -1063,7 +1093,7 @@ const trackShareEvent = async (channel) => {
     }
 
     try {
-        await fetch(`/${state.username}/share-events`, {
+        await fetch(publicEndpointPath('/share-events'), {
             method: 'POST',
             headers: {
                 Accept: 'application/json',
@@ -1233,7 +1263,7 @@ const fetchAvailability = async () => {
             params.set('service_id', bookingForm.product_id);
         }
 
-        const response = await fetch(`/${state.username}/appointments/availability?${params.toString()}`, {
+        const response = await fetch(`${publicEndpointPath('/appointments/availability')}?${params.toString()}`, {
             headers: { Accept: 'application/json' },
         });
         const payload = await response.json();
@@ -1250,7 +1280,7 @@ const fetchAvailability = async () => {
 };
 
 const submitPublicBooking = () => {
-    bookingForm.post(`/${state.username}/appointments`, {
+    bookingForm.post(publicEndpointPath('/appointments'), {
         preserveScroll: true,
         onSuccess: () => {
             bookingForm.reset();
@@ -1299,5 +1329,27 @@ watch(
     width: 0;
     height: 0;
     display: none;
+}
+
+.products-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(15, 23, 42, 0.14) transparent;
+}
+
+.products-scroll::-webkit-scrollbar {
+    width: 6px;
+}
+
+.products-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.products-scroll::-webkit-scrollbar-thumb {
+    background: rgba(15, 23, 42, 0.14);
+    border-radius: 999px;
+}
+
+.products-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(15, 23, 42, 0.2);
 }
 </style>
