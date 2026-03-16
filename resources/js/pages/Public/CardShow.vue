@@ -368,6 +368,7 @@ import {
     EnvelopeIcon,
     IdentificationIcon,
     LinkIcon,
+    MapPinIcon,
     PaperAirplaneIcon,
     PhoneIcon,
     PlusIcon,
@@ -715,6 +716,7 @@ const linkIconOptions = [
     { value: 'stripe', type: 'simple', icon: siStripe },
     { value: 'googlemessages', type: 'simple', icon: siGooglemessages },
     { value: 'link', type: 'hero', icon: LinkIcon },
+    { value: 'location', type: 'hero', icon: MapPinIcon },
     { value: 'phone', type: 'hero', icon: PhoneIcon },
     { value: 'sms', type: 'hero', icon: ChatBubbleLeftEllipsisIcon },
     { value: 'email', type: 'hero', icon: EnvelopeIcon },
@@ -753,6 +755,22 @@ const normalizeSpecialLinkUrl = (icon, rawUrl) => {
 
     if (icon === 'sms') {
         return `sms:${value.replace(/\s+/g, '')}`;
+    }
+
+    if (icon === 'location') {
+        if (/^(https?:\/\/)/i.test(value)) {
+            return value;
+        }
+
+        if (/^[a-z][a-z0-9+\-.]*:/i.test(value)) {
+            return value;
+        }
+
+        if (value.includes(' ') || !value.includes('.')) {
+            return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(value)}`;
+        }
+
+        return `https://${value}`;
     }
 
     return '';

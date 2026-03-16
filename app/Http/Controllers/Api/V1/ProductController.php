@@ -14,7 +14,7 @@ class ProductController extends BaseApiController
 {
     public function index(Request $request): JsonResponse
     {
-        $user = $this->requireBusinessUser($request);
+        $user = $this->requireBusinessOnly($request);
         $search = trim((string) $request->query('search', ''));
         $perPage = max(1, min((int) $request->query('per_page', 20), 50));
         $sortBy = (string) $request->query('sort_by', 'created_at');
@@ -73,7 +73,7 @@ class ProductController extends BaseApiController
 
     public function options(Request $request): JsonResponse
     {
-        $this->requireBusinessUser($request);
+        $this->requireBusinessOnly($request);
         $ownerId = $this->ownerId($request);
         $plan = $this->ownerPlan($ownerId);
         $maxProducts = $plan === 'free' ? 2 : null;
@@ -93,7 +93,7 @@ class ProductController extends BaseApiController
 
     public function show(Request $request, Product $product): JsonResponse
     {
-        $user = $this->requireBusinessUser($request);
+        $user = $this->requireBusinessOnly($request);
         $this->ensureOwnership($user, $product);
 
         return $this->ok(['item' => $this->serializeProduct($product)]);
@@ -101,7 +101,7 @@ class ProductController extends BaseApiController
 
     public function store(Request $request): JsonResponse
     {
-        $this->requireBusinessUser($request);
+        $this->requireBusinessOnly($request);
         $ownerId = $this->ownerId($request);
         $plan = $this->ownerPlan($ownerId);
 
@@ -139,7 +139,7 @@ class ProductController extends BaseApiController
 
     public function update(Request $request, Product $product): JsonResponse
     {
-        $user = $this->requireBusinessUser($request);
+        $user = $this->requireBusinessOnly($request);
         $this->ensureOwnership($user, $product);
 
         $validated = $request->validate([
@@ -179,7 +179,7 @@ class ProductController extends BaseApiController
 
     public function destroy(Request $request, Product $product): JsonResponse
     {
-        $user = $this->requireBusinessUser($request);
+        $user = $this->requireBusinessOnly($request);
         $this->ensureOwnership($user, $product);
 
         if ($product->image) {

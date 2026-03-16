@@ -14,11 +14,11 @@ class DashboardController extends BaseApiController
 {
     public function summary(Request $request): JsonResponse
     {
-        $user = $this->requireBusinessUser($request);
+        $user = $this->requireApiUser($request);
         $windowDays = max(1, min((int) $request->query('window_days', 30), 90));
 
         $cardIds = Card::query()
-            ->where('user_id', $user->id)
+            ->when($user->role !== 'admin', fn ($query) => $query->where('user_id', $user->id))
             ->pluck('id');
 
         $now = now();

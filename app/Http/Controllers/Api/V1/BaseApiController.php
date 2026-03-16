@@ -9,7 +9,7 @@ use Illuminate\Http\Request;
 
 abstract class BaseApiController extends Controller
 {
-    protected function requireBusinessUser(Request $request): User
+    protected function requireApiUser(Request $request): User
     {
         /** @var User|null $user */
         $user = $request->user();
@@ -18,7 +18,35 @@ abstract class BaseApiController extends Controller
         }
 
         if (! in_array($user->role, ['business', 'admin'], true)) {
-            abort(403, 'Only business users can access this API.');
+            abort(403, 'Only business or admin users can access this API.');
+        }
+
+        return $user;
+    }
+
+    protected function requireBusinessUser(Request $request): User
+    {
+        return $this->requireApiUser($request);
+    }
+
+    protected function requireBusinessOnly(Request $request): User
+    {
+        /** @var User|null $user */
+        $user = $this->requireApiUser($request);
+
+        if ($user->role !== 'business') {
+            abort(403, 'Admin role has read-only access for this module.');
+        }
+
+        return $user;
+    }
+
+    protected function requireAdminUser(Request $request): User
+    {
+        /** @var User|null $user */
+        $user = $this->requireApiUser($request);
+        if ($user->role !== 'admin') {
+            abort(403, 'Admin access required.');
         }
 
         return $user;

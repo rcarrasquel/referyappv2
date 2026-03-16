@@ -244,6 +244,7 @@
                         class="w-full rounded-lg border border-slate-200 px-3 py-2.5"
                         :placeholder="copy.durationPlaceholder"
                     >
+                    <p class="mt-1 text-xs text-slate-500">{{ copy.durationHint }}</p>
                     <p v-if="form.errors.duration_minutes" class="mt-1 text-xs text-rose-600">{{ form.errors.duration_minutes }}</p>
                 </div>
 
@@ -425,7 +426,8 @@ const copy = computed(() =>
             name: 'Name',
             description: 'Description',
             price: 'Price',
-            duration: 'Duration',
+            duration: 'Service Duration (for booking appointments)',
+            durationHint: 'Used to let visitors book appointments from your public card form.',
             link: 'Link',
             image: 'Image',
             actions: 'Actions',
@@ -463,7 +465,8 @@ const copy = computed(() =>
             name: 'Nombre',
             description: 'Descripción',
             price: 'Precio',
-            duration: 'Duracion',
+            duration: 'Duracion del servicio (para agendar citas)',
+            durationHint: 'Se usa para que las personas puedan agendar citas desde el formulario publico de tu tarjeta.',
             link: 'Enlace',
             image: 'Imagen',
             actions: 'Acciones',

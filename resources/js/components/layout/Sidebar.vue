@@ -12,7 +12,7 @@
         >
             <div class="flex h-full flex-col">
                 <div class="mb-6 px-2">
-                    <h2 class="text-xs font-semibold uppercase tracking-[0.18em] text-white/60">Navigation</h2>
+                    <h2 class="text-xs font-semibold uppercase tracking-[0.18em] text-white/60">{{ copy.navigation }}</h2>
                 </div>
 
                 <nav class="space-y-1">
@@ -37,12 +37,12 @@
                     rel="noopener noreferrer"
                     class="mt-4 inline-flex text-xs font-medium text-white/80 transition hover:text-white"
                 >
-                    A product of Xperteam LLC
+                    {{ copy.productBy }}
                 </a>
 
                 <div class="mt-auto rounded-xl border border-white/15 bg-white/10 p-4 text-white">
-                    <p class="text-sm font-semibold">ReferyApp Pro Experience</p>
-                    <p class="mt-1 text-xs text-white/75">Fast navigation, premium branding and modular architecture.</p>
+                    <p class="text-sm font-semibold">{{ copy.proExperience }}</p>
+                    <p class="mt-1 text-xs text-white/75">{{ copy.proExperienceDesc }}</p>
                 </div>
             </div>
         </aside>
@@ -54,7 +54,7 @@
             <div class="sidebar-scroll h-full overflow-y-auto" :class="isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'">
                 <div class="flex h-full flex-col">
                     <div class="mb-6 px-2">
-                        <h2 class="text-xs font-semibold uppercase tracking-[0.18em] text-white/60">Navigation</h2>
+                        <h2 class="text-xs font-semibold uppercase tracking-[0.18em] text-white/60">{{ copy.navigation }}</h2>
                     </div>
 
                     <nav class="space-y-1">
@@ -78,12 +78,12 @@
                         rel="noopener noreferrer"
                         class="mt-4 inline-flex text-xs font-medium text-white/80 transition hover:text-white"
                     >
-                        A product of Xperteam LLC
+                        {{ copy.productBy }}
                     </a>
 
                     <div class="mt-auto rounded-xl border border-white/15 bg-white/10 p-4 text-white">
-                        <p class="text-sm font-semibold">ReferyApp Pro Experience</p>
-                        <p class="mt-1 text-xs text-white/75">Fast navigation, premium branding and modular architecture.</p>
+                        <p class="text-sm font-semibold">{{ copy.proExperience }}</p>
+                        <p class="mt-1 text-xs text-white/75">{{ copy.proExperienceDesc }}</p>
                     </div>
                 </div>
             </div>
@@ -93,16 +93,18 @@
 
 <script setup>
 import {
-    CalendarDaysIcon,
     ChartBarSquareIcon,
+    CreditCardIcon,
     HomeIcon,
+    UsersIcon,
+    UserCircleIcon,
+    CalendarDaysIcon,
     IdentificationIcon,
     ShoppingBagIcon,
-    UserCircleIcon,
-    UsersIcon,
 } from '@heroicons/vue/24/outline';
 import { Link, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
+import { useLocale } from '@/composables/useLocale';
 
 defineProps({
     isOpen: {
@@ -114,29 +116,57 @@ defineProps({
 defineEmits(['close']);
 
 const page = usePage();
+const { t } = useLocale();
+const copy = computed(() => t({
+    en: {
+        navigation: 'Navigation',
+        dashboard: 'Dashboard',
+        cards: 'Cards',
+        products: 'Products',
+        appointments: 'Appointments',
+        updateProfile: 'Update Profile',
+        users: 'Users',
+        analytics: 'Analytics',
+        stripe: 'Stripe Settings',
+        productBy: 'A product of Xperteam LLC',
+        proExperience: 'ReferyApp Pro Experience',
+        proExperienceDesc: 'Fast navigation, premium branding and modular architecture.',
+    },
+    es: {
+        navigation: 'Navegacion',
+        dashboard: 'Dashboard',
+        cards: 'Tarjetas',
+        products: 'Productos',
+        appointments: 'Citas',
+        updateProfile: 'Actualizar Perfil',
+        users: 'Usuarios',
+        analytics: 'Analiticas',
+        stripe: 'Stripe Config',
+        productBy: 'Un producto de Xperteam LLC',
+        proExperience: 'Experiencia Pro de ReferyApp',
+        proExperienceDesc: 'Navegacion rapida, branding premium y arquitectura modular.',
+    },
+}));
 
-const adminItems = [
-    { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
-    { name: 'Cards', href: '/cards', icon: IdentificationIcon },
-    { name: 'Products', href: '/products', icon: ShoppingBagIcon },
-    { name: 'Appointments', href: '/appointments', icon: CalendarDaysIcon },
-    { name: 'Update Profile', href: '/profile', icon: UserCircleIcon },
-    { name: 'Users', href: '/users', icon: UsersIcon },
-    { name: 'Analytics', href: '/analytics', icon: ChartBarSquareIcon },
-];
+const adminItems = computed(() => [
+    { name: copy.value.dashboard, href: '/dashboard', icon: HomeIcon },
+    { name: copy.value.users, href: '/users', icon: UsersIcon },
+    { name: copy.value.stripe, href: '/stripe-settings', icon: CreditCardIcon },
+    { name: copy.value.analytics, href: '/analytics', icon: ChartBarSquareIcon },
+]);
 
-const businessItems = [
-    { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
-    { name: 'Cards', href: '/cards', icon: IdentificationIcon },
-    { name: 'Products', href: '/products', icon: ShoppingBagIcon },
-    { name: 'Appointments', href: '/appointments', icon: CalendarDaysIcon },
-    { name: 'Update Profile', href: '/profile', icon: UserCircleIcon },
-    { name: 'Analytics', href: '/analytics', icon: ChartBarSquareIcon },
-];
+const businessItems = computed(() => [
+    { name: copy.value.dashboard, href: '/dashboard', icon: HomeIcon },
+    { name: copy.value.cards, href: '/cards', icon: IdentificationIcon },
+    { name: copy.value.products, href: '/products', icon: ShoppingBagIcon },
+    { name: copy.value.appointments, href: '/appointments', icon: CalendarDaysIcon },
+    { name: copy.value.updateProfile, href: '/profile', icon: UserCircleIcon },
+    { name: copy.value.analytics, href: '/analytics', icon: ChartBarSquareIcon },
+]);
 
 const menuItems = computed(() => {
     const role = page.props.auth?.user?.role ?? 'business';
-    return role === 'admin' ? adminItems : businessItems;
+    return role === 'admin' ? adminItems.value : businessItems.value;
 });
 
 const isActive = (href) =>

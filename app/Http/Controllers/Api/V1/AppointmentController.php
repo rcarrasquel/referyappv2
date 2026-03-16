@@ -26,7 +26,7 @@ class AppointmentController extends BaseApiController
 
     public function index(Request $request): JsonResponse
     {
-        $user = $this->requireBusinessUser($request);
+        $user = $this->requireBusinessOnly($request);
         $search = trim((string) $request->query('search', ''));
         $cardId = trim((string) $request->query('card_id', ''));
         $month = trim((string) $request->query('month', now()->format('Y-m')));
@@ -80,7 +80,7 @@ class AppointmentController extends BaseApiController
 
     public function options(Request $request): JsonResponse
     {
-        $user = $this->requireBusinessUser($request);
+        $user = $this->requireBusinessOnly($request);
 
         $cardsQuery = Card::query()->orderBy('name');
         $servicesQuery = Product::query()->orderBy('name');
@@ -99,7 +99,7 @@ class AppointmentController extends BaseApiController
 
     public function show(Request $request, Appointment $appointment): JsonResponse
     {
-        $user = $this->requireBusinessUser($request);
+        $user = $this->requireBusinessOnly($request);
         $this->ensureAppointmentOwnership($user->id, $appointment, $user->role);
 
         return $this->ok([
@@ -109,7 +109,7 @@ class AppointmentController extends BaseApiController
 
     public function calendar(Request $request): JsonResponse
     {
-        $user = $this->requireBusinessUser($request);
+        $user = $this->requireBusinessOnly($request);
         $month = trim((string) $request->query('month', now()->format('Y-m')));
         $cardId = trim((string) $request->query('card_id', ''));
         $status = trim((string) $request->query('status', ''));
@@ -168,7 +168,7 @@ class AppointmentController extends BaseApiController
 
     public function dayAgenda(Request $request): JsonResponse
     {
-        $user = $this->requireBusinessUser($request);
+        $user = $this->requireBusinessOnly($request);
         $date = trim((string) $request->query('date', now()->toDateString()));
         $cardId = trim((string) $request->query('card_id', ''));
         $status = trim((string) $request->query('status', ''));
@@ -214,7 +214,7 @@ class AppointmentController extends BaseApiController
 
     public function availability(Request $request): JsonResponse
     {
-        $user = $this->requireBusinessUser($request);
+        $user = $this->requireBusinessOnly($request);
 
         $validated = $request->validate([
             'card_id' => ['required', 'string', Rule::exists('cards', 'id')],
@@ -240,7 +240,7 @@ class AppointmentController extends BaseApiController
 
     public function store(Request $request): JsonResponse
     {
-        $user = $this->requireBusinessUser($request);
+        $user = $this->requireBusinessOnly($request);
 
         $validated = $request->validate([
             'card_id' => ['required', 'string', Rule::exists('cards', 'id')],
@@ -289,7 +289,7 @@ class AppointmentController extends BaseApiController
 
     public function update(Request $request, Appointment $appointment): JsonResponse
     {
-        $user = $this->requireBusinessUser($request);
+        $user = $this->requireBusinessOnly($request);
         $this->ensureAppointmentOwnership($user->id, $appointment, $user->role);
 
         $validated = $request->validate([
@@ -338,7 +338,7 @@ class AppointmentController extends BaseApiController
 
     public function updateStatus(Request $request, Appointment $appointment): JsonResponse
     {
-        $user = $this->requireBusinessUser($request);
+        $user = $this->requireBusinessOnly($request);
         $this->ensureAppointmentOwnership($user->id, $appointment, $user->role);
 
         $validated = $request->validate([
@@ -356,7 +356,7 @@ class AppointmentController extends BaseApiController
 
     public function destroy(Request $request, Appointment $appointment): JsonResponse
     {
-        $user = $this->requireBusinessUser($request);
+        $user = $this->requireBusinessOnly($request);
         $this->ensureAppointmentOwnership($user->id, $appointment, $user->role);
         $appointment->delete();
 

@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\BillingTransaction;
+use App\Services\StripeService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -12,10 +14,39 @@ use Inertia\Response;
 
 class ProfileController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(Request $request, StripeService $stripe): Response
     {
+        $user = $request->user();
+
+        if ($user->role === 'business') {
+            try {
+                $stripe->syncLatestSubscriptionForUser($user);
+            } catch (\Throwable) {
+                // Keep profile loading even when Stripe is temporarily unavailable.
+            }
+        }
+
+        $transactions = BillingTransaction::query()
+            ->where('user_id', $user->id)
+            ->latest('paid_at')
+            ->latest('id')
+            ->limit(20)
+            ->get()
+            ->map(static fn (BillingTransaction $item): array => [
+                'id' => $item->id,
+                'amount_cents' => (int) $item->amount_cents,
+                'currency' => (string) $item->currency,
+                'status' => (string) $item->status,
+                'description' => (string) ($item->description ?? ''),
+                'paid_at' => optional($item->paid_at)->toIso8601String(),
+                'created_at' => optional($item->created_at)->toIso8601String(),
+            ])
+            ->values()
+            ->all();
+
         return Inertia::render('Profile/Index', [
-            'user' => $request->user(),
+            'user' => $user,
+            'transactions' => $transactions,
         ]);
     }
 
@@ -61,6 +92,7 @@ class ProfileController extends Controller
         }
 
         $user->save();
+        $request->session()->put('locale', $user->language);
 
         return back()->with('status', 'Profile updated successfully.');
     }

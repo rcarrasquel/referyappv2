@@ -12,7 +12,7 @@ class ProfileController extends BaseApiController
 {
     public function show(Request $request): JsonResponse
     {
-        $user = $this->requireBusinessUser($request);
+        $user = $this->requireBusinessOnly($request);
 
         return $this->ok([
             'user' => $this->serializeUser($user),
@@ -21,9 +21,9 @@ class ProfileController extends BaseApiController
 
     public function update(Request $request): JsonResponse
     {
-        $user = $this->requireBusinessUser($request);
+        $user = $this->requireBusinessOnly($request);
 
-        if ($user->role !== 'admin' && $request->has('email')) {
+        if ($request->has('email')) {
             throw ValidationException::withMessages([
                 'email' => 'Email updates are not allowed for this account.',
             ]);
@@ -37,25 +37,10 @@ class ProfileController extends BaseApiController
             'password_confirmation' => ['nullable', 'string'],
         ];
 
-        if ($user->role === 'admin') {
-            $rules['email'] = [
-                'required',
-                'string',
-                'lowercase',
-                'email',
-                'max:255',
-                Rule::unique('users', 'email')->ignore($user->id),
-            ];
-        }
-
         $validated = $request->validate($rules);
 
         $user->name = $validated['name'];
         $user->language = $validated['language'];
-
-        if ($user->role === 'admin') {
-            $user->email = $validated['email'];
-        }
 
         if (! empty($validated['password'])) {
             $user->password = $validated['password'];

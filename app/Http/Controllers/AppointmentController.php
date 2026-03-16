@@ -2,14 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\PublicCardRequestNotificationMail;
 use App\Models\Appointment;
 use App\Models\Card;
 use App\Models\Lead;
 use App\Models\Product;
+use App\Models\User;
+use App\Services\MailRuntimeConfigService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -303,7 +308,7 @@ class AppointmentController extends Controller
         }
 
         if (($validated['request_type'] ?? 'appointment') === 'contact') {
-            Lead::query()->create([
+            $lead = Lead::query()->create([
                 'user_id' => $card->user_id,
                 'card_id' => $card->id,
                 'product_id' => $product->id,
@@ -316,6 +321,14 @@ class AppointmentController extends Controller
                 'source' => 'public',
             ]);
 
+            $this->sendPublicRequestEmail(
+                $card,
+                $product,
+                'contact',
+                $lead,
+                null
+            );
+
             return back()->with('status', 'Contact request sent successfully.');
         }
 
@@ -325,7 +338,7 @@ class AppointmentController extends Controller
         $this->assertInsideSchedule($card, $startsAt, $endsAt);
         $this->assertNoOverlap($card->id, $startsAt, $endsAt);
 
-        Appointment::query()->create([
+        $appointment = Appointment::query()->create([
             'user_id' => $card->user_id,
             'card_id' => $card->id,
             'product_id' => $product?->id,
@@ -341,7 +354,65 @@ class AppointmentController extends Controller
             'source' => 'public',
         ]);
 
+        $this->sendPublicRequestEmail(
+            $card,
+            $product,
+            'appointment',
+            null,
+            $appointment
+        );
+
         return back()->with('status', 'Appointment request sent successfully.');
+    }
+
+    private function sendPublicRequestEmail(
+        Card $card,
+        Product $product,
+        string $requestType,
+        ?Lead $lead,
+        ?Appointment $appointment
+    ): void {
+        $owner = User::query()->find($card->user_id);
+        if (! $owner || ! $owner->email) {
+            return;
+        }
+
+        $language = in_array($owner->language, ['es', 'en'], true) ? $owner->language : 'en';
+
+        try {
+            app(MailRuntimeConfigService::class)->apply();
+
+            Mail::to($owner->email)->send(
+                new PublicCardRequestNotificationMail(
+                    card: $card,
+                    product: $product,
+                    requestType: $requestType,
+                    ownerLanguage: $language,
+                    lead: $lead,
+                    appointment: $appointment,
+                )
+            );
+
+            Log::info('Public card request email sent', [
+                'type' => $requestType,
+                'owner_email' => $owner->email,
+                'card_id' => $card->id,
+                'card_username' => $card->username,
+                'lead_id' => $lead?->id,
+                'appointment_id' => $appointment?->id,
+            ]);
+        } catch (\Throwable $exception) {
+            Log::error('Public card request email failed', [
+                'type' => $requestType,
+                'owner_email' => $owner->email,
+                'card_id' => $card->id,
+                'card_username' => $card->username,
+                'lead_id' => $lead?->id,
+                'appointment_id' => $appointment?->id,
+                'error' => $exception->getMessage(),
+            ]);
+            report($exception);
+        }
     }
 
     private function authorizeCard($user, Card $card): void

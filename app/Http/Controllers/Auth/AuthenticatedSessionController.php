@@ -33,7 +33,19 @@ class AuthenticatedSessionController extends Controller
             ]);
         }
 
+        if (! $request->user()?->hasVerifiedEmail()) {
+            $request->user()?->sendEmailVerificationNotification();
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            throw ValidationException::withMessages([
+                'email' => 'Please verify your email before signing in. We sent you a new verification link.',
+            ]);
+        }
+
         $request->session()->regenerate();
+        $request->session()->put('locale', $request->user()?->language ?? 'en');
 
         return redirect()->intended(route('dashboard', absolute: false));
     }

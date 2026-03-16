@@ -4,3 +4,12 @@ DB_PORT=3306
 DB_DATABASE=oqppbydo_myreferyapp
 DB_USERNAME=oqppbydo_myreferyapp
 DB_PASSWORD=^UaF2wZr8%W-
+
+
+my@refery.app
+M*_ZabM7L0=8
+
+mail.refery.app
+IMAP Port: 993 POP3 Port: 995
+mail.refery.app
+SMTP Port: 465

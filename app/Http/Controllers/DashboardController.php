@@ -2,8 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Appointment;
+use App\Models\BillingTransaction;
+use App\Models\Card;
 use App\Models\CardLinkClick;
 use App\Models\CardVisit;
+use App\Models\Lead;
+use App\Models\Product;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Inertia\Inertia;
@@ -14,9 +21,14 @@ class DashboardController extends Controller
     public function __invoke(Request $request): Response
     {
         $user = $request->user();
-        $cardsCount = $user?->cards()->count() ?? 0;
+        $isAdmin = $user?->role === 'admin';
+        $cardsCount = $isAdmin
+            ? Card::query()->count()
+            : ($user?->cards()->count() ?? 0);
         $needsFirstCard = $user && $user->role === 'business' && $cardsCount === 0;
-        $cardIds = $user?->cards()->pluck('id') ?? collect();
+        $cardIds = $isAdmin
+            ? Card::query()->pluck('id')
+            : ($user?->cards()->pluck('id') ?? collect());
 
         $now = now();
         $windowStart = $now->copy()->subDays(30);
@@ -59,7 +71,8 @@ class DashboardController extends Controller
 
         $ctr30 = $visitsLast30 > 0 ? round(($linkClicks30 / $visitsLast30) * 100, 1) : 0.0;
 
-        $topCards = $user?->cards()
+        $topCards = Card::query()
+            ->when(! $isAdmin, fn ($query) => $query->where('user_id', $user?->id))
             ->select(['id', 'name', 'username'])
             ->withCount([
                 'visits as visits_last_30' => fn ($query) => $query->where('visited_at', '>=', $windowStart),
@@ -83,7 +96,7 @@ class DashboardController extends Controller
                 ];
             })
             ->values()
-            ->all() ?? [];
+            ->all();
 
         $browsers = $this->breakdown(
             CardVisit::query()
@@ -106,6 +119,92 @@ class DashboardController extends Controller
                 ->limit(6)
                 ->get()
         );
+
+        $adminBasics = null;
+        if ($isAdmin) {
+            $paidRevenueQuery = BillingTransaction::query()
+                ->where(function ($query): void {
+                    $query
+                        ->whereNotNull('paid_at')
+                        ->orWhereIn('status', ['paid', 'succeeded']);
+                });
+
+            $currentMonthStart = now()->startOfMonth();
+            $currentMonthEnd = now()->endOfMonth();
+            $previousMonthStart = now()->subMonthNoOverflow()->startOfMonth();
+            $previousMonthEnd = now()->subMonthNoOverflow()->endOfMonth();
+
+            $monthlyRows = BillingTransaction::query()
+                ->selectRaw("DATE_FORMAT(COALESCE(paid_at, created_at), '%Y-%m') as ym, SUM(amount_cents) as total")
+                ->where(function ($query): void {
+                    $query
+                        ->whereNotNull('paid_at')
+                        ->orWhereIn('status', ['paid', 'succeeded']);
+                })
+                ->where('created_at', '>=', now()->subMonths(6)->startOfMonth())
+                ->groupBy('ym')
+                ->pluck('total', 'ym');
+
+            $monthSeries = collect(range(5, 0))
+                ->map(function (int $offset) use ($monthlyRows): array {
+                    $date = now()->subMonths($offset);
+                    $key = $date->format('Y-m');
+
+                    return [
+                        'key' => $key,
+                        'label' => $date->format('M Y'),
+                        'total_cents' => (int) ($monthlyRows[$key] ?? 0),
+                    ];
+                })
+                ->values();
+
+            $currentMonthRevenueCents = (int) (clone $paidRevenueQuery)
+                ->whereBetween(DB::raw('COALESCE(paid_at, created_at)'), [$currentMonthStart, $currentMonthEnd])
+                ->sum('amount_cents');
+            $previousMonthRevenueCents = (int) (clone $paidRevenueQuery)
+                ->whereBetween(DB::raw('COALESCE(paid_at, created_at)'), [$previousMonthStart, $previousMonthEnd])
+                ->sum('amount_cents');
+            $totalRevenueCents = (int) (clone $paidRevenueQuery)->sum('amount_cents');
+
+            $paidBusinessUsersCount = User::query()
+                ->where('role', 'business')
+                ->whereHas('billingTransactions', function ($query): void {
+                    $query
+                        ->whereNotNull('paid_at')
+                        ->orWhereIn('status', ['paid', 'succeeded']);
+                })
+                ->count();
+
+            $adminBasics = [
+                'total_users' => User::query()->count(),
+                'total_business_users' => User::query()->where('role', 'business')->count(),
+                'paid_business_users' => $paidBusinessUsersCount,
+                'total_admin_users' => User::query()->where('role', 'admin')->count(),
+                'total_cards' => Card::query()->count(),
+                'total_products' => Product::query()->count(),
+                'total_appointments' => Appointment::query()->count(),
+                'total_leads' => Lead::query()->count(),
+                'revenue_total_cents' => $totalRevenueCents,
+                'revenue_month_cents' => $currentMonthRevenueCents,
+                'revenue_previous_month_cents' => $previousMonthRevenueCents,
+                'revenue_month_delta_percent' => $this->percentageDelta($currentMonthRevenueCents, $previousMonthRevenueCents),
+                'monthly_revenue_series' => $monthSeries->all(),
+                'recent_users' => User::query()
+                    ->latest('created_at')
+                    ->limit(8)
+                    ->get(['id', 'name', 'email', 'role', 'plan', 'created_at'])
+                    ->map(fn (User $u): array => [
+                        'id' => $u->id,
+                        'name' => $u->name,
+                        'email' => $u->email,
+                        'role' => $u->role,
+                        'plan' => $u->plan,
+                        'created_at' => optional($u->created_at)->toIso8601String(),
+                    ])
+                    ->values()
+                    ->all(),
+            ];
+        }
 
         return Inertia::render('Dashboard/Index', [
             'stats' => [
@@ -149,6 +248,8 @@ class DashboardController extends Controller
             ],
             'cardsCount' => $cardsCount,
             'needsFirstCard' => $needsFirstCard,
+            'isAdmin' => $isAdmin,
+            'adminBasics' => $adminBasics,
         ]);
     }
 
@@ -182,5 +283,14 @@ class DashboardController extends Controller
             ])
             ->values()
             ->all();
+    }
+
+    private function percentageDelta(int $current, int $previous): float
+    {
+        if ($previous <= 0) {
+            return $current > 0 ? 100.0 : 0.0;
+        }
+
+        return round((($current - $previous) / $previous) * 100, 1);
     }
 }

@@ -193,6 +193,22 @@ class PublicCardController extends Controller
             return $phone !== '' ? 'sms:' . $phone : null;
         }
 
+        if ($icon === 'location') {
+            if (preg_match('/^https?:\/\//i', $url)) {
+                return $url;
+            }
+
+            if (preg_match('/^[a-z][a-z0-9+\-.]*:/i', $url)) {
+                return $url;
+            }
+
+            if (str_contains($url, ' ') || ! str_contains($url, '.')) {
+                return 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($url);
+            }
+
+            return 'https://' . $url;
+        }
+
         return 'https://' . $url;
     }
 

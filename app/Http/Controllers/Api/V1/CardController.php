@@ -36,7 +36,7 @@ class CardController extends BaseApiController
 
     public function index(Request $request): JsonResponse
     {
-        $user = $this->requireBusinessUser($request);
+        $user = $this->requireBusinessOnly($request);
         $search = trim((string) $request->query('search', ''));
         $perPage = max(1, min((int) $request->query('per_page', 20), 50));
         $sortBy = (string) $request->query('sort_by', 'created_at');
@@ -91,7 +91,7 @@ class CardController extends BaseApiController
 
     public function options(Request $request): JsonResponse
     {
-        $this->requireBusinessUser($request);
+        $this->requireBusinessOnly($request);
 
         $ownerId = $this->ownerId($request);
         $plan = $this->ownerPlan($ownerId);
@@ -117,7 +117,7 @@ class CardController extends BaseApiController
 
     public function checkUsername(Request $request): JsonResponse
     {
-        $this->requireBusinessUser($request);
+        $this->requireBusinessOnly($request);
 
         $validated = $request->validate([
             'username' => ['required', 'string', 'max:255', 'alpha_dash'],
@@ -139,7 +139,7 @@ class CardController extends BaseApiController
 
     public function show(Request $request, Card $card): JsonResponse
     {
-        $user = $this->requireBusinessUser($request);
+        $user = $this->requireBusinessOnly($request);
         $this->ensureOwnership($user, $card);
 
         return $this->ok([
@@ -149,7 +149,7 @@ class CardController extends BaseApiController
 
     public function store(Request $request): JsonResponse
     {
-        $this->requireBusinessUser($request);
+        $this->requireBusinessOnly($request);
         $ownerId = $this->ownerId($request);
 
         $validated = $request->validate([
@@ -207,7 +207,7 @@ class CardController extends BaseApiController
 
     public function update(Request $request, Card $card): JsonResponse
     {
-        $user = $this->requireBusinessUser($request);
+        $user = $this->requireBusinessOnly($request);
         $this->ensureOwnership($user, $card);
 
         $validated = $request->validate([
@@ -362,7 +362,7 @@ class CardController extends BaseApiController
 
     public function destroy(Request $request, Card $card): JsonResponse
     {
-        $user = $this->requireBusinessUser($request);
+        $user = $this->requireBusinessOnly($request);
         $this->ensureOwnership($user, $card);
 
         Storage::disk('public')->deleteDirectory("cards/{$card->id}");
@@ -415,7 +415,7 @@ class CardController extends BaseApiController
 
     private function synchronizeAutoLinks(array $links, array $contact): array
     {
-        $clean = collect($links)
+        $normalized = collect($links)
             ->map(fn ($link) => is_array($link) ? $link : [])
             ->map(fn (array $link): array => [
                 'icon' => trim((string) ($link['icon'] ?? 'link')),
@@ -423,39 +423,53 @@ class CardController extends BaseApiController
                 'url' => trim((string) ($link['url'] ?? '')),
                 'description' => trim((string) ($link['description'] ?? '')),
                 'auto_key' => trim((string) ($link['auto_key'] ?? '')),
-            ])
-            ->filter(fn (array $link): bool => $link['auto_key'] === '' || ! in_array($link['auto_key'], ['auto_phone', 'auto_email', 'auto_maps'], true))
+            ]);
+
+        $autoKeys = ['auto_phone', 'auto_email', 'auto_maps'];
+        $existingAuto = $normalized
+            ->filter(fn (array $link): bool => in_array($link['auto_key'], $autoKeys, true))
+            ->keyBy('auto_key');
+
+        $clean = $normalized
+            ->filter(fn (array $link): bool => ! in_array($link['auto_key'], $autoKeys, true))
             ->values();
 
         $phone = preg_replace('/\s+/', '', trim((string) ($contact['phone'] ?? '')));
         if ($phone !== '') {
+            $current = $existingAuto->get('auto_phone');
             $clean->push([
-                'icon' => 'phone',
-                'title' => 'Phone',
-                'url' => $phone,
-                'description' => '',
+                'icon' => trim((string) ($current['icon'] ?? 'phone')) ?: 'phone',
+                'title' => trim((string) ($current['title'] ?? 'Phone')),
+                'url' => trim((string) ($current['url'] ?? '')) ?: $phone,
+                'description' => trim((string) ($current['description'] ?? '')),
                 'auto_key' => 'auto_phone',
             ]);
         }
 
         $email = trim((string) ($contact['email'] ?? ''));
         if ($email !== '') {
+            $current = $existingAuto->get('auto_email');
             $clean->push([
-                'icon' => 'email',
-                'title' => 'Email',
-                'url' => $email,
-                'description' => '',
+                'icon' => trim((string) ($current['icon'] ?? 'email')) ?: 'email',
+                'title' => trim((string) ($current['title'] ?? 'Email')),
+                'url' => trim((string) ($current['url'] ?? '')) ?: $email,
+                'description' => trim((string) ($current['description'] ?? '')),
                 'auto_key' => 'auto_email',
             ]);
         }
 
         $maps = trim((string) ($contact['google_maps_url'] ?? ''));
         if ($maps !== '') {
+            $current = $existingAuto->get('auto_maps');
+            $currentIcon = trim((string) ($current['icon'] ?? ''));
+            $resolvedIcon = $currentIcon === '' || $currentIcon === 'google'
+                ? 'location'
+                : $currentIcon;
             $clean->push([
-                'icon' => 'google',
-                'title' => 'Google Maps',
-                'url' => $maps,
-                'description' => '',
+                'icon' => $resolvedIcon,
+                'title' => trim((string) ($current['title'] ?? 'Google Maps')),
+                'url' => trim((string) ($current['url'] ?? '')) ?: $maps,
+                'description' => trim((string) ($current['description'] ?? '')),
                 'auto_key' => 'auto_maps',
             ]);
         }

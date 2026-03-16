@@ -5,6 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\Card;
 use App\Models\CardLinkClick;
 use App\Models\CardVisit;
+use App\Models\BillingTransaction;
+use App\Models\Lead;
+use App\Models\Appointment;
+use App\Models\Product;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -17,11 +21,170 @@ class ModuleController extends Controller
 {
     public function users(): Response
     {
+        $paidFilter = static function ($query): void {
+            $query
+                ->whereNotNull('paid_at')
+                ->orWhereIn('status', ['paid', 'succeeded']);
+        };
+
         return Inertia::render('Modules/Users', [
             'users' => User::query()
                 ->latest('id')
                 ->select('id', 'name', 'email', 'role', 'plan', 'language', 'created_at')
+                ->withCount([
+                    'billingTransactions as paid_transactions_count' => $paidFilter,
+                ])
+                ->withSum([
+                    'billingTransactions as paid_total_cents' => $paidFilter,
+                ], 'amount_cents')
+                ->selectSub(
+                    BillingTransaction::query()
+                        ->selectRaw('MAX(COALESCE(paid_at, created_at))')
+                        ->whereColumn('billing_transactions.user_id', 'users.id')
+                        ->where(function ($query): void {
+                            $query
+                                ->whereNotNull('paid_at')
+                                ->orWhereIn('status', ['paid', 'succeeded']);
+                        }),
+                    'last_paid_at'
+                )
                 ->paginate(20),
+            'payingBusinesses' => User::query()
+                ->where('role', 'business')
+                ->whereHas('billingTransactions', $paidFilter)
+                ->select('id', 'name', 'email', 'plan', 'created_at')
+                ->withCount([
+                    'billingTransactions as paid_transactions_count' => $paidFilter,
+                ])
+                ->withSum([
+                    'billingTransactions as paid_total_cents' => $paidFilter,
+                ], 'amount_cents')
+                ->selectSub(
+                    BillingTransaction::query()
+                        ->selectRaw('MAX(COALESCE(paid_at, created_at))')
+                        ->whereColumn('billing_transactions.user_id', 'users.id')
+                        ->where(function ($query): void {
+                            $query
+                                ->whereNotNull('paid_at')
+                                ->orWhereIn('status', ['paid', 'succeeded']);
+                        }),
+                    'last_paid_at'
+                )
+                ->orderByDesc('paid_total_cents')
+                ->limit(100)
+                ->get(),
+        ]);
+    }
+
+    public function userDetail(User $user): Response
+    {
+        $cards = Card::query()
+            ->where('user_id', $user->id)
+            ->orderBy('name')
+            ->get(['id', 'name', 'username', 'created_at']);
+
+        $cardIds = $cards->pluck('id');
+        $windowStart = now()->subDays(30);
+
+        $visitsByCard = CardVisit::query()
+            ->selectRaw('card_id, count(*) as total')
+            ->whereIn('card_id', $cardIds)
+            ->groupBy('card_id')
+            ->get()
+            ->keyBy('card_id');
+
+        $clicksByCard = CardLinkClick::query()
+            ->selectRaw('card_id, count(*) as total')
+            ->whereIn('card_id', $cardIds)
+            ->groupBy('card_id')
+            ->get()
+            ->keyBy('card_id');
+
+        $visits30ByCard = CardVisit::query()
+            ->selectRaw('card_id, count(*) as total')
+            ->whereIn('card_id', $cardIds)
+            ->where('visited_at', '>=', $windowStart)
+            ->groupBy('card_id')
+            ->get()
+            ->keyBy('card_id');
+
+        $clicks30ByCard = CardLinkClick::query()
+            ->selectRaw('card_id, count(*) as total')
+            ->whereIn('card_id', $cardIds)
+            ->where('clicked_at', '>=', $windowStart)
+            ->groupBy('card_id')
+            ->get()
+            ->keyBy('card_id');
+
+        $cardsMetrics = $cards->map(function (Card $card) use ($visitsByCard, $clicksByCard, $visits30ByCard, $clicks30ByCard): array {
+            $visits = (int) ($visitsByCard[$card->id]->total ?? 0);
+            $clicks = (int) ($clicksByCard[$card->id]->total ?? 0);
+            $visits30 = (int) ($visits30ByCard[$card->id]->total ?? 0);
+            $clicks30 = (int) ($clicks30ByCard[$card->id]->total ?? 0);
+            $ctr30 = $visits30 > 0 ? round(($clicks30 / $visits30) * 100, 2) : 0.0;
+
+            return [
+                'id' => $card->id,
+                'name' => $card->name,
+                'username' => $card->username,
+                'created_at' => optional($card->created_at)->toIso8601String(),
+                'visits_total' => $visits,
+                'clicks_total' => $clicks,
+                'visits_30d' => $visits30,
+                'clicks_30d' => $clicks30,
+                'ctr_30d' => $ctr30,
+            ];
+        })->values()->all();
+
+        $paymentsQuery = BillingTransaction::query()
+            ->where('user_id', $user->id)
+            ->where(function ($query): void {
+                $query
+                    ->whereNotNull('paid_at')
+                    ->orWhereIn('status', ['paid', 'succeeded']);
+            });
+
+        $payments = (clone $paymentsQuery)
+            ->latest('paid_at')
+            ->latest('id')
+            ->limit(50)
+            ->get()
+            ->map(static fn (BillingTransaction $item): array => [
+                'id' => $item->id,
+                'amount_cents' => (int) $item->amount_cents,
+                'currency' => (string) $item->currency,
+                'status' => (string) $item->status,
+                'description' => (string) ($item->description ?? ''),
+                'paid_at' => optional($item->paid_at)->toIso8601String(),
+                'created_at' => optional($item->created_at)->toIso8601String(),
+            ])
+            ->values()
+            ->all();
+        $lastPaidAt = (clone $paymentsQuery)->max(DB::raw('COALESCE(paid_at, created_at)'));
+
+        return Inertia::render('Modules/UserDetail', [
+            'userItem' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role,
+                'plan' => $user->plan,
+                'language' => $user->language,
+                'created_at' => optional($user->created_at)->toIso8601String(),
+            ],
+            'summary' => [
+                'cards_total' => Card::query()->where('user_id', $user->id)->count(),
+                'products_total' => Product::query()->where('user_id', $user->id)->count(),
+                'appointments_total' => Appointment::query()->where('user_id', $user->id)->count(),
+                'leads_total' => Lead::query()->where('user_id', $user->id)->count(),
+                'visits_total' => CardVisit::query()->whereIn('card_id', $cardIds)->count(),
+                'clicks_total' => CardLinkClick::query()->whereIn('card_id', $cardIds)->count(),
+                'payments_total_cents' => (int) (clone $paymentsQuery)->sum('amount_cents'),
+                'payments_count' => (int) (clone $paymentsQuery)->count(),
+                'payments_last_at' => $lastPaidAt ? Carbon::parse($lastPaidAt)->toIso8601String() : null,
+            ],
+            'cardsMetrics' => $cardsMetrics,
+            'payments' => $payments,
         ]);
     }
 

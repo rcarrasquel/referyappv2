@@ -27,7 +27,7 @@ class AuthController extends BaseApiController
 
         if (! in_array($user->role, ['business', 'admin'], true)) {
             return response()->json([
-                'message' => 'Only business users can access the mobile API.',
+                'message' => 'Only business or admin users can access the mobile API.',
             ], 403);
         }
 

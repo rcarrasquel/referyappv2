@@ -30,7 +30,7 @@ class LeadController extends BaseApiController
 
     public function index(Request $request): JsonResponse
     {
-        $user = $this->requireBusinessUser($request);
+        $user = $this->requireBusinessOnly($request);
         $search = trim((string) $request->query('search', ''));
         $status = trim((string) $request->query('status', ''));
         $source = trim((string) $request->query('source', ''));
@@ -96,7 +96,7 @@ class LeadController extends BaseApiController
 
     public function options(Request $request): JsonResponse
     {
-        $user = $this->requireBusinessUser($request);
+        $user = $this->requireBusinessOnly($request);
 
         $cardsQuery = Card::query()->orderBy('name');
         $productsQuery = Product::query()->orderBy('name');
@@ -122,7 +122,7 @@ class LeadController extends BaseApiController
 
     public function show(Request $request, Lead $lead): JsonResponse
     {
-        $user = $this->requireBusinessUser($request);
+        $user = $this->requireBusinessOnly($request);
         $this->ensureOwnership($user, $lead);
 
         return $this->ok([
@@ -132,7 +132,7 @@ class LeadController extends BaseApiController
 
     public function store(Request $request): JsonResponse
     {
-        $user = $this->requireBusinessUser($request);
+        $user = $this->requireBusinessOnly($request);
 
         $validated = $request->validate([
             'card_id' => ['required', 'string', Rule::exists('cards', 'id')],
@@ -171,7 +171,7 @@ class LeadController extends BaseApiController
 
     public function update(Request $request, Lead $lead): JsonResponse
     {
-        $user = $this->requireBusinessUser($request);
+        $user = $this->requireBusinessOnly($request);
         $this->ensureOwnership($user, $lead);
 
         $validated = $request->validate([
@@ -240,7 +240,7 @@ class LeadController extends BaseApiController
 
     public function destroy(Request $request, Lead $lead): JsonResponse
     {
-        $user = $this->requireBusinessUser($request);
+        $user = $this->requireBusinessOnly($request);
         $this->ensureOwnership($user, $lead);
 
         $lead->delete();

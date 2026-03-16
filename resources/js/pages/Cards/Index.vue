@@ -17,7 +17,7 @@
             v-if="isFreeLimitReached"
             class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800"
         >
-            Free plan allows only one card. Upgrade to monthly or lifetime to create more.
+            Free plan allows only one card. Upgrade to Business to create more.
         </p>
 
         <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">

@@ -1,17 +1,22 @@
 <?php
 
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use App\Http\Controllers\Auth\EmailVerificationNotificationController;
+use App\Http\Controllers\Auth\EmailVerificationPromptController;
 use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\RegisteredUserController;
+use App\Http\Controllers\Auth\VerifyEmailController;
 use App\Http\Controllers\AppointmentController;
 use App\Http\Controllers\CardController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\ModuleController;
 use App\Http\Controllers\PublicCardController;
+use App\Http\Controllers\BillingController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\StripeSettingsController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
@@ -136,8 +141,28 @@ Route::middleware('guest')->group(function (): void {
     Route::post('/reset-password', [NewPasswordController::class, 'store'])->name('password.store');
 });
 
+Route::get('/email/verify/{id}/{hash}', VerifyEmailController::class)
+    ->middleware(['signed', 'throttle:6,1'])
+    ->name('verification.verify');
+
 Route::middleware('auth')->group(function (): void {
+    Route::get('/email/verify', EmailVerificationPromptController::class)
+        ->name('verification.notice');
+
+    Route::post('/email/verification-notification', [EmailVerificationNotificationController::class, 'store'])
+        ->middleware('throttle:6,1')
+        ->name('verification.send');
+
+    Route::get('/signout', [AuthenticatedSessionController::class, 'destroyViaGet'])->name('signout');
+    Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
+});
+
+Route::middleware(['auth', 'verified'])->group(function (): void {
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
+    Route::get('/analytics', [ModuleController::class, 'analytics'])->name('analytics');
+});
+
+Route::middleware(['auth', 'verified', 'business'])->group(function (): void {
     Route::get('/cards', [CardController::class, 'index'])->name('cards.index');
     Route::post('/cards', [CardController::class, 'store'])->name('cards.store');
     Route::get('/cards/{card}', [CardController::class, 'show'])->name('cards.show');
@@ -156,17 +181,20 @@ Route::middleware('auth')->group(function (): void {
 
     Route::get('/profile', [ProfileController::class, 'index'])->name('profile');
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::post('/billing/checkout', [BillingController::class, 'checkout'])->name('billing.checkout');
+    Route::post('/billing/sync-session', [BillingController::class, 'syncSession'])->name('billing.sync-session');
+    Route::post('/billing/cancel-subscription', [BillingController::class, 'cancelSubscription'])->name('billing.cancel-subscription');
 
     Route::get('/settings', [ModuleController::class, 'settings'])->name('settings');
-    Route::get('/analytics', [ModuleController::class, 'analytics'])->name('analytics');
     Route::get('/reports', [ModuleController::class, 'reports'])->name('reports');
 
-    Route::get('/signout', [AuthenticatedSessionController::class, 'destroyViaGet'])->name('signout');
-    Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
 });
 
-Route::middleware(['auth', 'admin'])->group(function (): void {
+Route::middleware(['auth', 'verified', 'admin'])->group(function (): void {
     Route::get('/users', [ModuleController::class, 'users'])->name('users');
+    Route::get('/users/{user}', [ModuleController::class, 'userDetail'])->name('users.show');
+    Route::get('/stripe-settings', [StripeSettingsController::class, 'index'])->name('stripe.settings');
+    Route::put('/stripe-settings', [StripeSettingsController::class, 'update'])->name('stripe.settings.update');
 });
 
 Route::post('/locale', LocaleController::class)->name('locale.switch');

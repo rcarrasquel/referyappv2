@@ -20,7 +20,7 @@
                         @click="isMenuOpen = !isMenuOpen"
                     >
                         <UserCircleIcon class="h-4 w-4" />
-                        {{ user?.name ?? 'User' }}
+                        {{ props.user?.name ?? copy.user }}
                     </button>
 
                     <div
@@ -28,12 +28,13 @@
                         class="absolute right-0 z-[140] mt-2 w-44 rounded-xl border border-slate-200 bg-white p-2 shadow-xl"
                     >
                         <Link
+                            v-if="!isAdmin"
                             href="/profile"
                             class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-50"
                             @click="isMenuOpen = false"
                         >
                             <UserCircleIcon class="h-4 w-4" />
-                            Update Profile
+                            {{ copy.updateProfile }}
                         </Link>
                         <button
                             type="button"
@@ -41,7 +42,7 @@
                             @click="handleLogout"
                         >
                             <ArrowLeftOnRectangleIcon class="h-4 w-4" />
-                            Logout
+                            {{ copy.logout }}
                         </button>
                     </div>
                 </div>
@@ -53,11 +54,12 @@
 <script setup>
 import { ArrowLeftOnRectangleIcon, Bars3Icon, UserCircleIcon, XMarkIcon } from '@heroicons/vue/24/outline';
 import { Link, router } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
+import { useLocale } from '@/composables/useLocale';
 
 defineEmits(['toggle-sidebar']);
 
-defineProps({
+const props = defineProps({
     user: {
         type: Object,
         default: null,
@@ -69,6 +71,20 @@ defineProps({
 });
 
 const isMenuOpen = ref(false);
+const { t } = useLocale();
+const isAdmin = computed(() => props.user?.role === 'admin');
+const copy = computed(() => t({
+    en: {
+        user: 'User',
+        updateProfile: 'Update Profile',
+        logout: 'Logout',
+    },
+    es: {
+        user: 'Usuario',
+        updateProfile: 'Actualizar Perfil',
+        logout: 'Cerrar Sesion',
+    },
+}));
 
 const handleLogout = () => {
     isMenuOpen.value = false;

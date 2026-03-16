@@ -565,6 +565,32 @@
                         </div>
                     </div>
                 </div>
+                <div class="mx-auto mt-4 w-[320px] rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+                    <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{{ copy.publicCardUrl }}</p>
+                    <div class="mt-2 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                        <p class="min-w-0 flex-1 truncate text-sm font-medium text-slate-700" :title="publicCardUrl">
+                            {{ publicCardUrl }}
+                        </p>
+                        <button
+                            type="button"
+                            class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:border-[#6DBE45] hover:text-[#111111]"
+                            :title="copy.copyUrl"
+                            @click="copyPublicCardUrl"
+                        >
+                            <ClipboardDocumentIcon class="h-4 w-4" />
+                        </button>
+                    </div>
+                    <p v-if="copiedPublicUrl" class="mt-1 text-xs font-medium text-[#6DBE45]">{{ copy.urlCopied }}</p>
+                    <a
+                        :href="publicCardUrl"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#6DBE45] px-4 py-2.5 text-sm font-semibold text-[#111111] transition hover:bg-[#5da939]"
+                    >
+                        <ArrowTopRightOnSquareIcon class="h-4 w-4" />
+                        {{ copy.viewRealTime }}
+                    </a>
+                </div>
             </section>
         </div>
     </div>
@@ -686,15 +712,18 @@ import Button from '@/components/ui/Button.vue';
 import Card from '@/components/ui/Card.vue';
 import Modal from '@/components/ui/Modal.vue';
 import {
+    ArrowTopRightOnSquareIcon,
     ArrowLeftIcon,
     Bars3Icon,
     ChevronDownIcon,
     ChatBubbleLeftEllipsisIcon,
     CheckIcon,
+    ClipboardDocumentIcon,
     ClockIcon,
     EnvelopeIcon,
     IdentificationIcon,
     LinkIcon,
+    MapPinIcon,
     PhoneIcon,
     PhotoIcon,
     PlusIcon,
@@ -858,6 +887,7 @@ const showCropModal = ref(false);
 const showRemoveProfileModal = ref(false);
 const showRemoveHeaderModal = ref(false);
 const showRemoveBackgroundModal = ref(false);
+const copiedPublicUrl = ref(false);
 const cropSource = ref('');
 const originalImageFile = ref(null);
 const cropTarget = ref('profile');
@@ -899,6 +929,10 @@ const copy = computed(() =>
             styleTemplateTitle: 'Card templates',
             saveStyle: 'Save Style',
             saveButtonStyle: 'Save Button Style',
+            publicCardUrl: 'Public card URL',
+            copyUrl: 'Copy URL',
+            urlCopied: 'URL copied',
+            viewRealTime: 'View My Card in Real Time',
         },
         es: {
             usernameWarning: 'Si ya has compartido tu tarjeta recomendamos no cambiar ese usuario.',
@@ -930,6 +964,10 @@ const copy = computed(() =>
             styleTemplateTitle: 'Plantillas de tarjeta',
             saveStyle: 'Guardar estilo',
             saveButtonStyle: 'Guardar estilo de botones',
+            publicCardUrl: 'URL publica de la tarjeta',
+            copyUrl: 'Copiar URL',
+            urlCopied: 'URL copiada',
+            viewRealTime: 'Ver mi tarjeta en tiempo real',
         },
     })
 );
@@ -959,6 +997,7 @@ const linkIconOptions = [
     { value: 'stripe', label: 'Stripe', type: 'simple', icon: siStripe },
     { value: 'googlemessages', label: 'Google Messages', type: 'simple', icon: siGooglemessages },
     { value: 'link', label: 'Link', type: 'hero', icon: LinkIcon },
+    { value: 'location', label: 'Location / Address', type: 'hero', icon: MapPinIcon },
     { value: 'phone', label: 'Phone', type: 'hero', icon: PhoneIcon },
     { value: 'sms', label: 'SMS', type: 'hero', icon: ChatBubbleLeftEllipsisIcon },
     { value: 'email', label: 'Email (Generic)', type: 'hero', icon: EnvelopeIcon },
@@ -966,6 +1005,14 @@ const linkIconOptions = [
 
 const linkIconMap = Object.fromEntries(linkIconOptions.map((option) => [option.value, option]));
 const defaultLinkIcon = linkIconMap.link;
+const publicCardUrl = computed(() => {
+    if (typeof window === 'undefined') {
+        return `/${state.username || props.card.username || ''}`;
+    }
+
+    const username = (state.username || props.card.username || '').toString().trim();
+    return username ? `${window.location.origin}/${username}` : window.location.origin;
+});
 
 const previewLinks = computed(() => state.links
     .filter((link) => (link?.title ?? '').trim() || (link?.url ?? '').trim())
@@ -1668,6 +1715,33 @@ const confirmRemoveBackgroundImage = () => {
                 imagesForm.remove_background_image = false;
             },
         });
+};
+
+const copyPublicCardUrl = async () => {
+    const value = publicCardUrl.value;
+    if (!value) {
+        return;
+    }
+
+    try {
+        if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(value);
+        } else {
+            const input = document.createElement('input');
+            input.value = value;
+            document.body.appendChild(input);
+            input.select();
+            document.execCommand('copy');
+            document.body.removeChild(input);
+        }
+
+        copiedPublicUrl.value = true;
+        window.setTimeout(() => {
+            copiedPublicUrl.value = false;
+        }, 1600);
+    } catch {
+        copiedPublicUrl.value = false;
+    }
 };
 
 watch(activeTab, (tab) => {
