@@ -11,6 +11,7 @@ use App\Http\Controllers\AppointmentController;
 use App\Http\Controllers\CardController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LocaleController;
+use App\Http\Controllers\MailSettingsController;
 use App\Http\Controllers\ModuleController;
 use App\Http\Controllers\PublicCardController;
 use App\Http\Controllers\BillingController;
@@ -195,6 +196,9 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function (): void {
     Route::get('/users/{user}', [ModuleController::class, 'userDetail'])->name('users.show');
     Route::get('/stripe-settings', [StripeSettingsController::class, 'index'])->name('stripe.settings');
     Route::put('/stripe-settings', [StripeSettingsController::class, 'update'])->name('stripe.settings.update');
+    Route::get('/mail-settings', [MailSettingsController::class, 'index'])->name('mail.settings');
+    Route::put('/mail-settings', [MailSettingsController::class, 'update'])->name('mail.settings.update');
+    Route::post('/mail-settings/test', [MailSettingsController::class, 'test'])->name('mail.settings.test');
 });
 
 Route::post('/locale', LocaleController::class)->name('locale.switch');

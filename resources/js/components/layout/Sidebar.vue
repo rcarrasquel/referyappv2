@@ -95,6 +95,7 @@
 import {
     ChartBarSquareIcon,
     CreditCardIcon,
+    EnvelopeIcon,
     HomeIcon,
     UsersIcon,
     UserCircleIcon,
@@ -128,6 +129,7 @@ const copy = computed(() => t({
         users: 'Users',
         analytics: 'Analytics',
         stripe: 'Stripe Settings',
+        mail: 'Mail Settings',
         productBy: 'A product of Xperteam LLC',
         proExperience: 'ReferyApp Pro Experience',
         proExperienceDesc: 'Fast navigation, premium branding and modular architecture.',
@@ -142,6 +144,7 @@ const copy = computed(() => t({
         users: 'Usuarios',
         analytics: 'Analiticas',
         stripe: 'Stripe Config',
+        mail: 'Config Mail',
         productBy: 'Un producto de Xperteam LLC',
         proExperience: 'Experiencia Pro de ReferyApp',
         proExperienceDesc: 'Navegacion rapida, branding premium y arquitectura modular.',
@@ -152,6 +155,7 @@ const adminItems = computed(() => [
     { name: copy.value.dashboard, href: '/dashboard', icon: HomeIcon },
     { name: copy.value.users, href: '/users', icon: UsersIcon },
     { name: copy.value.stripe, href: '/stripe-settings', icon: CreditCardIcon },
+    { name: copy.value.mail, href: '/mail-settings', icon: EnvelopeIcon },
     { name: copy.value.analytics, href: '/analytics', icon: ChartBarSquareIcon },
 ]);
 
