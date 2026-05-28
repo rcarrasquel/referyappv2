@@ -2,7 +2,7 @@
     <Head title="Stripe Settings" />
 
     <div class="space-y-5">
-        <div class="rounded-2xl bg-[linear-gradient(130deg,#111111_0%,#173010_58%,#6DBE45_115%)] p-5 text-white shadow-[0_22px_45px_rgba(8,12,8,0.42)]">
+        <div class="rounded-2xl bg-[#111111] border border-[#264318] p-5 text-white shadow-[0_22px_45px_rgba(8,12,8,0.42)]">
             <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[#c7f4b2]">Admin Billing</p>
             <h1 class="mt-1 text-2xl font-semibold tracking-tight">Stripe Settings</h1>
             <p class="mt-1 text-sm text-white/75">Configure billing keys and monthly subscription price.</p>

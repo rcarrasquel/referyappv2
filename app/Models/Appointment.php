@@ -29,6 +29,7 @@ class Appointment extends Model
         'status',
         'notes',
         'source',
+        'cal_booking_id',
     ];
 
     protected function casts(): array

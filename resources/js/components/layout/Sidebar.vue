@@ -7,7 +7,7 @@
         />
 
         <aside
-            class="sidebar-scroll fixed left-0 top-16 z-50 h-[calc(100vh-4rem)] w-72 overflow-y-auto border-r border-black/20 bg-[linear-gradient(180deg,#111111_0%,#111111_62%,#1a2a12_82%,#6DBE45_100%)] p-4 shadow-2xl transition-transform duration-300 lg:hidden"
+            class="sidebar-scroll fixed left-0 top-16 z-50 h-[calc(100vh-4rem)] w-72 overflow-y-auto border-r border-[#264318] bg-[#111111] p-4 shadow-2xl transition-transform duration-300 lg:hidden"
             :class="isOpen ? 'translate-x-0' : '-translate-x-full'"
         >
             <div class="flex h-full flex-col">
@@ -48,7 +48,7 @@
         </aside>
 
         <aside
-            class="hidden h-full shrink-0 border-r border-black/20 bg-[linear-gradient(180deg,#111111_0%,#111111_62%,#1a2a12_82%,#6DBE45_100%)] shadow-xl transition-all duration-300 lg:block"
+            class="hidden h-full shrink-0 border-r border-[#264318] bg-[#111111] shadow-xl transition-all duration-300 lg:block"
             :class="isOpen ? 'w-72 p-4' : 'w-0 p-0 overflow-hidden border-r-0'"
         >
             <div class="sidebar-scroll h-full overflow-y-auto" :class="isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'">

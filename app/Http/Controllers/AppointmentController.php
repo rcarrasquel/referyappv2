@@ -8,6 +8,7 @@ use App\Models\Card;
 use App\Models\Lead;
 use App\Models\Product;
 use App\Models\User;
+use App\Services\CalComBookingService;
 use App\Services\MailRuntimeConfigService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -159,7 +160,7 @@ class AppointmentController extends Controller
         $this->assertInsideSchedule($card, $startsAt, $endsAt);
         $this->assertNoOverlap($card->id, $startsAt, $endsAt);
 
-        Appointment::query()->create([
+        $appointment = Appointment::query()->create([
             'user_id' => $card->user_id,
             'card_id' => $card->id,
             'product_id' => $product?->id,
@@ -174,6 +175,8 @@ class AppointmentController extends Controller
             'notes' => $this->nullableTrim($validated['notes'] ?? null),
             'source' => 'dashboard',
         ]);
+
+        $this->syncCreateWithCal($card->user_id, $appointment);
 
         return back()->with('status', 'Appointment created successfully.');
     }
@@ -192,6 +195,10 @@ class AppointmentController extends Controller
         $appointment->update([
             'status' => $validated['status'],
         ]);
+
+        if ($validated['status'] === 'cancelled') {
+            $this->syncCancelWithCal($appointment);
+        }
 
         return back()->with('status', 'Appointment status updated.');
     }
@@ -242,6 +249,8 @@ class AppointmentController extends Controller
             'notes' => $this->nullableTrim($validated['notes'] ?? null),
         ]);
 
+        $this->syncRescheduleWithCal($card->user_id, $appointment);
+
         return back()->with('status', 'Appointment updated successfully.');
     }
 
@@ -252,6 +261,7 @@ class AppointmentController extends Controller
             abort(403);
         }
 
+        $this->syncCancelWithCal($appointment);
         $appointment->delete();
 
         return back()->with('status', 'Appointment deleted successfully.');
@@ -273,6 +283,10 @@ class AppointmentController extends Controller
         $product = $this->resolveProduct($validated['service_id'] ?? null, $card->user_id);
         $duration = $this->resolveDuration($validated['duration_minutes'] ?? null, $product?->duration_minutes);
         $slots = $this->buildAvailableSlots($card, $validated['date'], $duration);
+        $calSlots = $this->syncAvailabilityWithCal($card->user_id, $validated['date']);
+        if ($calSlots !== null) {
+            $slots = $calSlots;
+        }
 
         return response()->json([
             'slots' => $slots,
@@ -353,6 +367,8 @@ class AppointmentController extends Controller
             'notes' => $this->nullableTrim($validated['notes'] ?? null),
             'source' => 'public',
         ]);
+
+        $this->syncCreateWithCal($card->user_id, $appointment);
 
         $this->sendPublicRequestEmail(
             $card,
@@ -546,5 +562,143 @@ class AppointmentController extends Controller
 
         $service = trim((string) $serviceName);
         return $service !== '' ? $service : null;
+    }
+
+    private function syncEnabledForUser(?User $owner): bool
+    {
+        return $owner
+            && (bool) $owner->cal_sync_enabled
+            && trim((string) $owner->cal_api_key) !== ''
+            && trim((string) $owner->cal_event_type_id) !== '';
+    }
+
+    private function syncCreateWithCal(int $ownerId, Appointment $appointment): void
+    {
+        $owner = User::query()->find($ownerId);
+        if (! $this->syncEnabledForUser($owner)) {
+            return;
+        }
+
+        $result = app(CalComBookingService::class)->BookAppointmentCal(
+            (string) $owner->cal_api_key,
+            (string) $owner->cal_event_type_id,
+            $appointment->starts_at?->toIso8601String() ?: '',
+            (string) $appointment->full_name,
+            (string) ($appointment->email ?: $owner->email),
+            config('app.timezone', 'UTC'),
+            $appointment->phone,
+            $appointment->notes,
+        );
+
+        if (($result['ok'] ?? false) !== true) {
+            Log::warning('Cal.com create sync failed', ['appointment_id' => $appointment->id, 'result' => $result]);
+            return;
+        }
+
+        $bookingId = $this->extractCalBookingId($result['data'] ?? []);
+        if ($bookingId !== '') {
+            $appointment->cal_booking_id = $bookingId;
+            $appointment->save();
+        }
+    }
+
+    private function syncRescheduleWithCal(int $ownerId, Appointment $appointment): void
+    {
+        $owner = User::query()->find($ownerId);
+        if (! $this->syncEnabledForUser($owner)) {
+            return;
+        }
+
+        if (! $appointment->cal_booking_id) {
+            $this->syncCreateWithCal($ownerId, $appointment);
+            return;
+        }
+
+        $result = app(CalComBookingService::class)->RescheduleBookingCal(
+            (string) $owner->cal_api_key,
+            (string) $appointment->cal_booking_id,
+            $appointment->starts_at?->toIso8601String() ?: '',
+            $appointment->ends_at?->toIso8601String(),
+            'Rescheduled from ReferyApp'
+        );
+
+        if (($result['ok'] ?? false) !== true) {
+            Log::warning('Cal.com reschedule sync failed', ['appointment_id' => $appointment->id, 'result' => $result]);
+        }
+    }
+
+    private function syncCancelWithCal(Appointment $appointment): void
+    {
+        if (! $appointment->cal_booking_id) {
+            return;
+        }
+
+        $owner = User::query()->find($appointment->user_id);
+        if (! $this->syncEnabledForUser($owner)) {
+            return;
+        }
+
+        $result = app(CalComBookingService::class)->CancelBookingCal(
+            (string) $owner->cal_api_key,
+            (string) $appointment->cal_booking_id,
+            'Cancelled from ReferyApp'
+        );
+
+        if (($result['ok'] ?? false) !== true) {
+            Log::warning('Cal.com cancel sync failed', ['appointment_id' => $appointment->id, 'result' => $result]);
+        }
+    }
+
+    private function syncAvailabilityWithCal(int $ownerId, string $date): ?array
+    {
+        $owner = User::query()->find($ownerId);
+        if (! $this->syncEnabledForUser($owner)) {
+            return null;
+        }
+
+        $result = app(CalComBookingService::class)->CheckAvailabilityCal(
+            (string) $owner->cal_api_key,
+            (string) $owner->cal_event_type_id,
+            $date,
+            config('app.timezone', 'UTC')
+        );
+
+        if (($result['ok'] ?? false) !== true) {
+            Log::warning('Cal.com availability sync failed', ['owner_id' => $ownerId, 'date' => $date, 'result' => $result]);
+            return null;
+        }
+
+        $items = is_array($result['data'] ?? null) ? $result['data'] : [];
+        $slots = [];
+
+        foreach ($items as $key => $value) {
+            if (is_string($key)) {
+                $time = Carbon::parse($key)->format('H:i');
+                $slots[] = ['time' => $time, 'available' => true];
+                continue;
+            }
+
+            if (is_array($value) && isset($value['start'])) {
+                $time = Carbon::parse((string) $value['start'])->format('H:i');
+                $slots[] = ['time' => $time, 'available' => true];
+            }
+        }
+
+        return collect($slots)->unique('time')->sortBy('time')->values()->all();
+    }
+
+    private function extractCalBookingId(array $data): string
+    {
+        $id = (string) ($data['id'] ?? $data['bookingId'] ?? '');
+        if ($id !== '') {
+            return $id;
+        }
+
+        $nested = $data['booking'] ?? null;
+        if (is_array($nested)) {
+            return (string) ($nested['id'] ?? $nested['bookingId'] ?? '');
+        }
+
+        return '';
     }
 }

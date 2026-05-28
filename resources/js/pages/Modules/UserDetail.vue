@@ -2,7 +2,7 @@
     <Head title="User Detail" />
 
     <div class="space-y-5">
-        <Card class="overflow-hidden border border-[#264318] bg-[linear-gradient(145deg,#111111_0%,#173010_65%,#6DBE45_140%)] text-white shadow-[0_18px_38px_rgba(9,14,8,0.42)]">
+        <Card class="overflow-hidden border border-[#264318] bg-[#111111] text-white shadow-[0_18px_38px_rgba(9,14,8,0.42)]">
             <div class="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <p class="text-xs font-semibold uppercase tracking-[0.16em] text-[#c7f4b2]">Admin User Detail</p>

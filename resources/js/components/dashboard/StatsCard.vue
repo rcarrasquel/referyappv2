@@ -4,7 +4,7 @@
         :while-hover="{ y: -2 }"
         class="stats-card relative z-10 overflow-hidden rounded-xl border border-[#264318] p-6 shadow-[0_16px_34px_rgba(9,14,8,0.36)] transition hover:shadow-[0_18px_40px_rgba(10,20,8,0.52)]"
         :style="{
-            background: 'linear-gradient(160deg, #111111 0%, #162510 55%, #1f3315 100%)',
+            background: '#111111',
             color: '#ffffff'
         }"
     >

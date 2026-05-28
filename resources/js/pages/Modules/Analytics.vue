@@ -4,7 +4,7 @@
     <div class="relative space-y-6">
         <div class="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_right,_rgba(109,190,69,0.2),_transparent_46%),radial-gradient(circle_at_bottom_left,_rgba(17,17,17,0.12),_transparent_40%)]" />
 
-        <section class="rounded-2xl bg-[linear-gradient(130deg,#111111_0%,#1a3111_60%,#6DBE45_120%)] p-5 text-white shadow-[0_24px_48px_rgba(8,12,8,0.4)]">
+        <section class="rounded-2xl bg-[#111111] border border-[#264318] p-5 text-white shadow-[0_24px_48px_rgba(8,12,8,0.4)]">
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[#c8f5b3]">Analytics Center</p>
@@ -93,7 +93,7 @@
                 <span class="text-xs text-slate-500">{{ ranges.current.start }} - {{ ranges.current.end }}</span>
             </div>
 
-            <div class="rounded-xl border border-slate-100 bg-[linear-gradient(180deg,#f8fafc,#eef3f8)] p-3">
+            <div class="rounded-xl border border-slate-100 bg-white p-3">
                 <div class="mb-3 flex flex-wrap items-center gap-3 text-xs font-medium">
                     <span class="inline-flex items-center gap-1 text-[#6DBE45]"><span class="h-2 w-2 rounded-full bg-[#6DBE45]" />Views</span>
                     <span class="inline-flex items-center gap-1 text-[#111111]"><span class="h-2 w-2 rounded-full bg-[#111111]" />Clicks</span>
@@ -170,7 +170,7 @@
                         </div>
                         <p class="truncate text-xs text-slate-500">{{ link.url || '-' }}</p>
                         <div class="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
-                            <div class="h-full rounded-full bg-[linear-gradient(90deg,#111111,#6DBE45)]" :style="{ width: `${barWidth(link.clicks, maxTopLinkClicks)}%` }" />
+                            <div class="h-full rounded-full bg-[#6DBE45]" :style="{ width: `${barWidth(link.clicks, maxTopLinkClicks)}%` }" />
                         </div>
                     </div>
                 </div>

@@ -27,6 +27,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/users/{user}', [UserController::class, 'show']);
         Route::get('/profile', [ProfileController::class, 'show']);
         Route::put('/profile', [ProfileController::class, 'update']);
+        Route::post('/profile/cal/test', [ProfileController::class, 'testCalConnection']);
 
         Route::get('/cards', [CardController::class, 'index']);
         Route::get('/cards/options', [CardController::class, 'options']);

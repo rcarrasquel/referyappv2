@@ -1782,7 +1782,7 @@ watch(activeTab, (tab) => {
 .upload-mask {
     border: 1px dashed rgb(203 213 225);
     border-radius: 0.9rem;
-    background: linear-gradient(180deg, #ffffff, #f8fafc);
+    background: #ffffff;
     overflow: hidden;
     transition: border-color 0.2s ease, transform 0.2s ease;
 }

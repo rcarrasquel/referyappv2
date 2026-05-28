@@ -2,7 +2,7 @@
     <Head title="Dashboard" />
 
     <div class="relative">
-        <div class="relative z-10 mb-6 rounded-2xl bg-[linear-gradient(130deg,#111111_0%,#173010_58%,#6DBE45_115%)] p-5 text-white shadow-[0_22px_45px_rgba(8,12,8,0.42)]">
+        <div class="relative z-10 mb-6 rounded-2xl bg-[#111111] p-5 text-white shadow-[0_22px_45px_rgba(8,12,8,0.42)] border border-[#264318]">
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[#c7f4b2]">Analytics Hub</p>
@@ -14,7 +14,7 @@
         </div>
 
         <div v-if="isAdmin && adminBasics" class="relative z-10 mb-6 grid gap-4 lg:grid-cols-12">
-            <div class="rounded-2xl border border-[#264318] bg-[linear-gradient(160deg,#111111_0%,#162510_55%,#1f3315_100%)] p-4 text-white shadow-[0_16px_34px_rgba(9,14,8,0.36)] lg:col-span-7">
+            <div class="rounded-2xl border border-[#264318] bg-[#111111] p-4 text-white shadow-[0_16px_34px_rgba(9,14,8,0.36)] lg:col-span-7">
                 <div class="mb-3 flex items-center justify-between gap-3">
                     <h2 class="text-sm font-semibold">Admin Overview</h2>
                     <span class="rounded-md bg-[#6DBE45] px-2 py-1 text-xs font-semibold text-[#111111]">System</span>
@@ -89,7 +89,7 @@
                 </div>
             </div>
 
-            <div class="rounded-2xl border border-[#264318] bg-[linear-gradient(160deg,#111111_0%,#162510_55%,#1f3315_100%)] p-4 text-white shadow-[0_16px_34px_rgba(9,14,8,0.36)] lg:col-span-5">
+            <div class="rounded-2xl border border-[#264318] bg-[#111111] p-4 text-white shadow-[0_16px_34px_rgba(9,14,8,0.36)] lg:col-span-5">
                 <h2 class="text-sm font-semibold">Latest Users</h2>
                 <div v-if="adminBasics.recent_users?.length" class="mt-3 space-y-2">
                     <div
@@ -108,7 +108,7 @@
 
         <div
             v-if="needsFirstCard"
-            class="relative z-10 mb-6 overflow-hidden rounded-2xl border border-[#6DBE45]/35 bg-[linear-gradient(125deg,#0f160d_0%,#152311_45%,#1e3316_72%,#6DBE45_145%)] p-5 text-white shadow-[0_18px_42px_rgba(11,18,9,0.45)]"
+            class="relative z-10 mb-6 overflow-hidden rounded-2xl border border-[#6DBE45]/35 bg-[#111111] p-5 text-white shadow-[0_18px_42px_rgba(11,18,9,0.45)]"
         >
             <div class="pointer-events-none absolute -right-14 -top-14 h-44 w-44 rounded-full bg-[#9be476]/18 blur-2xl" />
             <div class="pointer-events-none absolute -bottom-16 -left-14 h-40 w-40 rounded-full bg-white/8 blur-2xl" />
@@ -145,7 +145,7 @@
         </div>
 
         <div class="relative z-10 mt-6 grid gap-4 lg:grid-cols-2">
-            <div class="rounded-xl border border-[#264318] bg-[linear-gradient(160deg,#111111_0%,#162510_55%,#1f3315_100%)] p-4 text-white shadow-[0_16px_34px_rgba(9,14,8,0.36)]">
+            <div class="rounded-xl border border-[#264318] bg-[#111111] p-4 text-white shadow-[0_16px_34px_rgba(9,14,8,0.36)]">
                 <h2 class="text-sm font-semibold text-white">Top Cards (Last 30 Days)</h2>
                 <div v-if="analytics.topCards.length" class="mt-3 space-y-2">
                     <div
@@ -165,7 +165,7 @@
                 <p v-else class="mt-3 text-sm text-white/70">No analytics data yet.</p>
             </div>
 
-            <div class="rounded-xl border border-[#264318] bg-[linear-gradient(160deg,#111111_0%,#162510_55%,#1f3315_100%)] p-4 text-white shadow-[0_16px_34px_rgba(9,14,8,0.36)]">
+            <div class="rounded-xl border border-[#264318] bg-[#111111] p-4 text-white shadow-[0_16px_34px_rgba(9,14,8,0.36)]">
                 <h2 class="text-sm font-semibold text-white">Traffic Breakdown (Last 30 Days)</h2>
                 <div class="mt-3 grid gap-3 sm:grid-cols-2">
                     <div class="rounded-lg border border-white/10 bg-white/5 p-3">

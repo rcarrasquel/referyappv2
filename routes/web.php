@@ -182,6 +182,7 @@ Route::middleware(['auth', 'verified', 'business'])->group(function (): void {
 
     Route::get('/profile', [ProfileController::class, 'index'])->name('profile');
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::post('/profile/cal/test', [ProfileController::class, 'testCalConnection'])->name('profile.cal.test');
     Route::post('/billing/checkout', [BillingController::class, 'checkout'])->name('billing.checkout');
     Route::post('/billing/sync-session', [BillingController::class, 'syncSession'])->name('billing.sync-session');
     Route::post('/billing/cancel-subscription', [BillingController::class, 'cancelSubscription'])->name('billing.cancel-subscription');

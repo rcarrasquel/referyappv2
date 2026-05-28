@@ -5,10 +5,13 @@ namespace App\Http\Controllers\Api\V1;
 use App\Models\Appointment;
 use App\Models\Card;
 use App\Models\Product;
+use App\Models\User;
+use App\Services\CalComBookingService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -282,6 +285,8 @@ class AppointmentController extends BaseApiController
             'source' => 'dashboard_api',
         ]);
 
+        $this->syncCreateWithCal($card->user_id, $appointment);
+
         return $this->ok([
             'item' => $this->serializeAppointment($appointment->load(['card:id,name,username', 'product:id,name,duration_minutes'])),
         ], 201);
@@ -331,6 +336,8 @@ class AppointmentController extends BaseApiController
             'notes' => $this->nullableTrim($validated['notes'] ?? null),
         ]);
 
+        $this->syncRescheduleWithCal($card->user_id, $appointment);
+
         return $this->ok([
             'item' => $this->serializeAppointment($appointment->fresh()->load(['card:id,name,username', 'product:id,name,duration_minutes'])),
         ]);
@@ -349,6 +356,10 @@ class AppointmentController extends BaseApiController
             'status' => $validated['status'],
         ]);
 
+        if ($validated['status'] === 'cancelled') {
+            $this->syncCancelWithCal($appointment);
+        }
+
         return $this->ok([
             'item' => $this->serializeAppointment($appointment->fresh()->load(['card:id,name,username', 'product:id,name,duration_minutes'])),
         ]);
@@ -358,6 +369,7 @@ class AppointmentController extends BaseApiController
     {
         $user = $this->requireBusinessOnly($request);
         $this->ensureAppointmentOwnership($user->id, $appointment, $user->role);
+        $this->syncCancelWithCal($appointment);
         $appointment->delete();
 
         return $this->message('Appointment deleted successfully.');
@@ -541,5 +553,105 @@ class AppointmentController extends BaseApiController
 
         $service = trim((string) $serviceName);
         return $service !== '' ? $service : null;
+    }
+
+    private function syncEnabledForUser(?User $owner): bool
+    {
+        return $owner
+            && (bool) $owner->cal_sync_enabled
+            && trim((string) $owner->cal_api_key) !== ''
+            && trim((string) $owner->cal_event_type_id) !== '';
+    }
+
+    private function syncCreateWithCal(int $ownerId, Appointment $appointment): void
+    {
+        $owner = User::query()->find($ownerId);
+        if (! $this->syncEnabledForUser($owner)) {
+            return;
+        }
+
+        $result = app(CalComBookingService::class)->BookAppointmentCal(
+            (string) $owner->cal_api_key,
+            (string) $owner->cal_event_type_id,
+            $appointment->starts_at?->toIso8601String() ?: '',
+            (string) $appointment->full_name,
+            (string) ($appointment->email ?: $owner->email),
+            config('app.timezone', 'UTC'),
+            $appointment->phone,
+            $appointment->notes,
+        );
+
+        if (($result['ok'] ?? false) !== true) {
+            Log::warning('Cal.com API create sync failed', ['appointment_id' => $appointment->id, 'result' => $result]);
+            return;
+        }
+
+        $bookingId = $this->extractCalBookingId($result['data'] ?? []);
+        if ($bookingId !== '') {
+            $appointment->cal_booking_id = $bookingId;
+            $appointment->save();
+        }
+    }
+
+    private function syncRescheduleWithCal(int $ownerId, Appointment $appointment): void
+    {
+        $owner = User::query()->find($ownerId);
+        if (! $this->syncEnabledForUser($owner)) {
+            return;
+        }
+
+        if (! $appointment->cal_booking_id) {
+            $this->syncCreateWithCal($ownerId, $appointment);
+            return;
+        }
+
+        $result = app(CalComBookingService::class)->RescheduleBookingCal(
+            (string) $owner->cal_api_key,
+            (string) $appointment->cal_booking_id,
+            $appointment->starts_at?->toIso8601String() ?: '',
+            $appointment->ends_at?->toIso8601String(),
+            'Rescheduled from ReferyApp API'
+        );
+
+        if (($result['ok'] ?? false) !== true) {
+            Log::warning('Cal.com API reschedule sync failed', ['appointment_id' => $appointment->id, 'result' => $result]);
+        }
+    }
+
+    private function syncCancelWithCal(Appointment $appointment): void
+    {
+        if (! $appointment->cal_booking_id) {
+            return;
+        }
+
+        $owner = User::query()->find($appointment->user_id);
+        if (! $this->syncEnabledForUser($owner)) {
+            return;
+        }
+
+        $result = app(CalComBookingService::class)->CancelBookingCal(
+            (string) $owner->cal_api_key,
+            (string) $appointment->cal_booking_id,
+            'Cancelled from ReferyApp API'
+        );
+
+        if (($result['ok'] ?? false) !== true) {
+            Log::warning('Cal.com API cancel sync failed', ['appointment_id' => $appointment->id, 'result' => $result]);
+        }
+    }
+
+    private function extractCalBookingId(array $data): string
+    {
+        $id = (string) ($data['id'] ?? $data['bookingId'] ?? '');
+        if ($id !== '') {
+            return $id;
+        }
+
+        $nested = $data['booking'] ?? null;
+        if (is_array($nested)) {
+            return (string) ($nested['id'] ?? $nested['bookingId'] ?? '');
+        }
+
+        return '';
     }
 }

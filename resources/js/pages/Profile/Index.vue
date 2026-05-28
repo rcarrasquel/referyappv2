@@ -2,7 +2,7 @@
     <Head title="Update Profile" />
 
     <div class="space-y-5">
-        <div class="mb-6 rounded-2xl bg-[linear-gradient(130deg,#111111_0%,#173010_58%,#6DBE45_115%)] p-5 text-white shadow-[0_22px_45px_rgba(8,12,8,0.42)]">
+        <div class="mb-6 rounded-2xl bg-[#111111] border border-[#264318] p-5 text-white shadow-[0_22px_45px_rgba(8,12,8,0.42)]">
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[#c7f4b2]">{{ copy.accountSettings }}</p>
@@ -12,16 +12,17 @@
             </div>
         </div>
 
-        <div class="max-w-3xl">
-            <Card>
-                <p
-                    v-if="flashStatus"
-                    class="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700"
-                >
-                    {{ flashStatus }}
-                </p>
+        <div class="max-w-6xl">
+            <p
+                v-if="flashStatus"
+                class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700"
+            >
+                {{ flashStatus }}
+            </p>
 
-                <form class="mt-6 space-y-4" @submit.prevent="submit">
+            <form class="mt-4 grid gap-5 lg:grid-cols-2" @submit.prevent="submit">
+                <Card>
+                    <div class="space-y-4">
                     <div>
                         <label class="mb-1 flex items-center gap-2 text-sm font-medium text-slate-700" for="name">
                             <UserCircleIcon class="h-4 w-4" />
@@ -128,7 +129,7 @@
                         </div>
                     </div>
 
-                    <div class="flex flex-wrap items-center gap-3 pt-1">
+                    <div class="flex flex-wrap items-center justify-center gap-3 pt-1">
                         <Button
                             v-if="isBusinessUser && user.plan !== 'business'"
                             type="button"
@@ -163,8 +164,96 @@
                             </span>
                         </Button>
                     </div>
-                </form>
-            </Card>
+                    </div>
+                </Card>
+
+                <Card>
+                    <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <p class="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800">
+                            <LinkIcon class="h-4 w-4" />
+                            {{ copy.calIntegration }}
+                        </p>
+
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            <div class="sm:col-span-2">
+                                <label class="mb-1 block text-sm font-medium text-slate-700" for="cal_api_key">{{ copy.calApiKey }}</label>
+                                <input
+                                    id="cal_api_key"
+                                    v-model="form.cal_api_key"
+                                    type="text"
+                                    autocomplete="off"
+                                    class="w-full rounded-lg border border-slate-200 px-3 py-2.5 focus:ring focus:ring-[#6DBE45]"
+                                    :placeholder="copy.calApiKeyPlaceholder"
+                                >
+                                <p class="mt-1 text-xs text-slate-500">{{ copy.calApiHelp }}</p>
+                                <p v-if="form.errors.cal_api_key" class="mt-1 text-xs text-rose-600">{{ form.errors.cal_api_key }}</p>
+                            </div>
+
+                            <div class="sm:col-span-2">
+                                <label class="mb-1 block text-sm font-medium text-slate-700" for="cal_event_type_id">{{ copy.calEventType }}</label>
+                                <input
+                                    id="cal_event_type_id"
+                                    v-model="form.cal_event_type_id"
+                                    type="text"
+                                    autocomplete="off"
+                                    class="w-full rounded-lg border border-slate-200 px-3 py-2.5 focus:ring focus:ring-[#6DBE45]"
+                                    placeholder="123456"
+                                >
+                                <p class="mt-1 text-xs text-slate-500">{{ copy.calEventTypeHelp }}</p>
+                                <p v-if="form.errors.cal_event_type_id" class="mt-1 text-xs text-rose-600">{{ form.errors.cal_event_type_id }}</p>
+                                <p v-else-if="form.errors.cal_event_type_id" class="mt-1 text-xs text-rose-600">{{ form.errors.cal_event_type_id }}</p>
+                            </div>
+
+                            <div class="sm:col-span-2">
+                                <label class="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+                                    <span class="text-sm font-medium text-slate-700">{{ copy.calSyncEnabled }}</span>
+                                    <input
+                                        v-model="form.cal_sync_enabled"
+                                        type="checkbox"
+                                        class="h-4 w-4 rounded border-slate-300 text-[#6DBE45] focus:ring-[#6DBE45]"
+                                    >
+                                </label>
+                                <p class="mt-1 text-xs text-slate-500">{{ copy.calSyncEnabledHelp }}</p>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 flex flex-wrap items-center justify-center gap-2">
+                            <Button v-if="calHasStoredKey" type="button" variant="danger" @click="removeCalApiKey">
+                                <span class="inline-flex items-center gap-2">
+                                    <TrashIcon class="h-4 w-4" />
+                                    {{ copy.removeCalApiKey }}
+                                </span>
+                            </Button>
+
+                            <Button type="button" variant="secondary" :disabled="calTestLoading" @click="testCalConnection">
+                                <span class="inline-flex items-center gap-2">
+                                    <BoltIcon class="h-4 w-4" />
+                                    {{ calTestLoading ? copy.testingConnection : copy.testConnection }}
+                                </span>
+                            </Button>
+
+                            <Button type="submit" class="!bg-[#6DBE45] hover:!bg-[#5ea83b] focus:!ring-[#6DBE45]">
+                                <span class="inline-flex items-center gap-2">
+                                    <CheckIcon class="h-4 w-4" />
+                                    {{ copy.saveCalSettings }}
+                                </span>
+                            </Button>
+                        </div>
+
+                        <p
+                            v-if="calStatusMessage"
+                            class="mt-3 rounded-lg px-3 py-2 text-xs"
+                            :class="calStatusType === 'success' ? 'border border-emerald-200 bg-emerald-50 text-emerald-700' : 'border border-rose-200 bg-rose-50 text-rose-700'"
+                        >
+                            {{ calStatusMessage }}
+                        </p>
+
+                        <p class="mt-2 text-xs text-slate-500">
+                            {{ copy.lastCalTest }}: <span class="font-semibold text-slate-700">{{ calLastConnectedAtLabel }}</span>
+                        </p>
+                    </div>
+                </Card>
+            </form>
         </div>
 
         <Card class="mt-5">
@@ -245,7 +334,8 @@ import Button from '@/components/ui/Button.vue';
 import Card from '@/components/ui/Card.vue';
 import Modal from '@/components/ui/Modal.vue';
 import { useLocale } from '@/composables/useLocale';
-import { CheckIcon, CreditCardIcon, EnvelopeIcon, ExclamationTriangleIcon, KeyIcon, LanguageIcon, NoSymbolIcon, UserCircleIcon, XMarkIcon } from '@heroicons/vue/24/outline';
+import { CheckIcon, CreditCardIcon, EnvelopeIcon, ExclamationTriangleIcon, KeyIcon, LanguageIcon, LinkIcon, NoSymbolIcon, TrashIcon, UserCircleIcon, XMarkIcon } from '@heroicons/vue/24/outline';
+import { BoltIcon } from '@heroicons/vue/24/solid';
 import { Head, useForm, usePage } from '@inertiajs/vue3';
 import { computed, onMounted, ref } from 'vue';
 
@@ -257,6 +347,10 @@ const props = defineProps({
     transactions: {
         type: Array,
         default: () => [],
+    },
+    cal: {
+        type: Object,
+        default: () => ({}),
     },
 });
 
@@ -297,6 +391,22 @@ const copy = computed(() => t({
         statusLabel: 'Status',
         noPayments: 'No transactions yet.',
         saveChanges: 'Save Changes',
+        calIntegration: 'Cal.com Integration',
+        calApiKey: 'Cal.com API Key',
+        calApiKeyPlaceholder: 'Paste your Cal.com API key',
+        calApiHelp: 'Used to sync bookings and availability from your Cal.com account.',
+        calEventType: 'Event Type ID (Cal.com)',
+        calEventTypeHelp: 'Use the exact Event Type ID from Cal.com.',
+        calSyncEnabled: 'Enable Cal.com sync',
+        calSyncEnabledHelp: 'When enabled, appointment CRUD will sync automatically with Cal.com.',
+        testConnection: 'Test Connection',
+        testingConnection: 'Testing...',
+        removeCalApiKey: 'Remove API Key',
+        calConnectionOk: 'Cal.com connected successfully.',
+        calConnectionFail: 'Unable to connect to Cal.com.',
+        saveCalSettings: 'Save',
+        lastCalTest: 'Last connection test',
+        never: 'Never',
     },
     es: {
         accountSettings: 'Configuracion de Cuenta',
@@ -328,6 +438,22 @@ const copy = computed(() => t({
         statusLabel: 'Estado',
         noPayments: 'Aun no hay transacciones.',
         saveChanges: 'Guardar Cambios',
+        calIntegration: 'Integracion Cal.com',
+        calApiKey: 'API Key de Cal.com',
+        calApiKeyPlaceholder: 'Pega tu API key de Cal.com',
+        calApiHelp: 'Se usa para sincronizar citas y disponibilidad desde tu cuenta Cal.com.',
+        calEventType: 'Event Type ID (Cal.com)',
+        calEventTypeHelp: 'Usa el Event Type ID exacto de Cal.com.',
+        calSyncEnabled: 'Activar sincronizacion con Cal.com',
+        calSyncEnabledHelp: 'Si esta activo, el CRUD de citas se sincroniza automaticamente con Cal.com.',
+        testConnection: 'Probar Conexion',
+        testingConnection: 'Probando...',
+        removeCalApiKey: 'Eliminar API Key',
+        calConnectionOk: 'Cal.com conectado correctamente.',
+        calConnectionFail: 'No se pudo conectar con Cal.com.',
+        saveCalSettings: 'Guardar',
+        lastCalTest: 'Ultima prueba de conexion',
+        never: 'Nunca',
     },
 }));
 
@@ -346,6 +472,10 @@ const form = useForm({
     current_password: '',
     password: '',
     password_confirmation: '',
+    cal_api_key: props.cal?.api_key ?? '',
+    cal_event_type_id: props.cal?.event_type_id ?? props.cal?.event_type_slug ?? '',
+    cal_sync_enabled: Boolean(props.cal?.sync_enabled ?? false),
+    remove_cal_api_key: false,
 });
 
 const billingForm = useForm({});
@@ -354,6 +484,24 @@ const billingSyncForm = useForm({
 });
 const cancelForm = useForm({});
 const showCancelModal = ref(false);
+const calTestLoading = ref(false);
+const calStatusMessage = ref('');
+const calStatusType = ref('success');
+const calHasStoredKey = ref(Boolean(props.cal?.has_api_key));
+const calLastConnectedAt = ref(props.cal?.connected_at ?? null);
+
+const calLastConnectedAtLabel = computed(() => {
+    if (!calLastConnectedAt.value) {
+        return copy.value.never;
+    }
+
+    const dt = new Date(calLastConnectedAt.value);
+    if (Number.isNaN(dt.getTime())) {
+        return copy.value.never;
+    }
+
+    return dt.toLocaleString();
+});
 
 const submit = () => {
     form
@@ -368,8 +516,54 @@ const submit = () => {
         })
         .put('/profile', {
             preserveScroll: true,
-            onSuccess: () => form.reset('current_password', 'password', 'password_confirmation'),
+            onSuccess: () => {
+                form.reset('current_password', 'password', 'password_confirmation');
+                form.remove_cal_api_key = false;
+            },
         });
+};
+
+const testCalConnection = async () => {
+    calStatusMessage.value = '';
+    calStatusType.value = 'success';
+    calTestLoading.value = true;
+
+    try {
+        const response = await fetch('/profile/cal/test', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+            },
+            body: JSON.stringify({
+                cal_api_key: form.cal_api_key,
+            }),
+        });
+
+        const result = await response.json();
+        if (!response.ok || !result?.ok) {
+            throw new Error(result?.message || copy.value.calConnectionFail);
+        }
+
+        calHasStoredKey.value = true;
+        calLastConnectedAt.value = new Date().toISOString();
+        calStatusType.value = 'success';
+        calStatusMessage.value = result?.message || copy.value.calConnectionOk;
+    } catch (error) {
+        calStatusType.value = 'error';
+        calStatusMessage.value = error?.message || copy.value.calConnectionFail;
+    } finally {
+        calTestLoading.value = false;
+    }
+};
+
+const removeCalApiKey = () => {
+    form.cal_api_key = '';
+    form.remove_cal_api_key = true;
+    calHasStoredKey.value = false;
+    calStatusType.value = 'success';
+    calStatusMessage.value = copy.value.removeCalApiKey;
 };
 
 const goBusiness = () => {

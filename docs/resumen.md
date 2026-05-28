@@ -106,6 +106,28 @@ Permite que cada usuario business publique su tarjeta por URL publica y reciba i
 - Plantillas HTML profesionales multilenguaje (ES/EN segun idioma del owner).
 - Envio sin colas.
 - Configuracion SMTP manual mediante `config/mail_manual.php`.
+- `config/mail_manual.php` se conserva, pero ahora funciona como loader:
+  - primero lee configuracion activa desde DB (`mail_settings`)
+  - si no hay datos activos, aplica fallback seguro
+
+### 11.1 Configuracion SMTP Admin (Mail Settings)
+- Nuevo modulo admin: `Mail Settings`.
+- Permite configurar desde UI y guardar en DB (sin cifrado, sin JSON):
+  - host
+  - port
+  - encryption
+  - username
+  - password
+  - timeout
+  - from_address
+  - from_name
+  - is_active
+- Incluye prueba de configuracion SMTP (`Send Test Email`) para validar entrega real.
+- Tabla dedicada: `mail_settings`.
+- Rutas admin:
+  - `GET /mail-settings`
+  - `PUT /mail-settings`
+  - `POST /mail-settings/test`
 
 ### 12. QR y vCard
 - Generacion de QR centrado con branding por plan.

@@ -32,6 +32,11 @@ class User extends Authenticatable implements MustVerifyEmail
         'stripe_subscription_status',
         'stripe_price_id',
         'stripe_current_period_end',
+        'cal_api_key',
+        'cal_username',
+        'cal_event_type_id',
+        'cal_connected_at',
+        'cal_sync_enabled',
     ];
 
     /**
@@ -42,6 +47,7 @@ class User extends Authenticatable implements MustVerifyEmail
     protected $hidden = [
         'password',
         'remember_token',
+        'cal_api_key',
     ];
 
     /**
@@ -54,6 +60,8 @@ class User extends Authenticatable implements MustVerifyEmail
         return [
             'email_verified_at' => 'datetime',
             'stripe_current_period_end' => 'datetime',
+            'cal_connected_at' => 'datetime',
+            'cal_sync_enabled' => 'boolean',
             'password' => 'hashed',
         ];
     }

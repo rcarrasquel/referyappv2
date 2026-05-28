@@ -2,7 +2,7 @@
     <Head title="Products" />
 
     <div class="space-y-5">
-        <div class="mb-6 rounded-2xl bg-[linear-gradient(130deg,#111111_0%,#173010_58%,#6DBE45_115%)] p-5 text-white shadow-[0_22px_45px_rgba(8,12,8,0.42)]">
+        <div class="mb-6 rounded-2xl bg-[#111111] border border-[#264318] p-5 text-white shadow-[0_22px_45px_rgba(8,12,8,0.42)]">
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[#c7f4b2]">Service Management</p>
@@ -291,7 +291,7 @@
                             <span class="text-sm font-medium">{{ copy.uploadImage }}</span>
                         </div>
                     </div>
-                    <div class="absolute inset-x-0 bottom-0 flex items-center justify-center bg-gradient-to-t from-black/45 to-transparent px-3 py-2 text-xs font-medium text-white">
+                    <div class="absolute inset-x-0 bottom-0 flex items-center justify-center bg-black/55 px-3 py-2 text-xs font-medium text-white">
                         <span class="inline-flex items-center gap-1.5">
                             <ArrowUpTrayIcon class="h-4 w-4" />
                             {{ copy.uploadImage }}
