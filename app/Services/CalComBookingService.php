@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\Http;
 class CalComBookingService
 {
     private const BASE_URL = 'https://api.cal.com';
+    private const BOOKING_API_VERSION = '2026-02-25';
+    private const SLOT_API_VERSION = '2024-09-04';
 
     /**
      * Check slots for a given event type and date.
@@ -28,7 +30,7 @@ class CalComBookingService
         $start = Carbon::parse($date, $timezone)->startOfDay()->utc()->toIso8601String();
         $end = Carbon::parse($date, $timezone)->endOfDay()->utc()->toIso8601String();
 
-        $payload = [
+        $basePayload = [
             'eventTypeId' => $eventTypeId,
             'start' => $start,
             'end' => $end,
@@ -36,8 +38,19 @@ class CalComBookingService
         ];
 
         $attempts = [
-            ['GET', '/v2/slots', $payload, ['cal-api-version' => '2024-08-13']],
-            ['GET', '/v1/slots', $payload, []],
+            ['GET', '/v2/slots', $basePayload, ['cal-api-version' => self::SLOT_API_VERSION]],
+            ['GET', '/v2/slots', $basePayload, ['cal-api-version' => self::BOOKING_API_VERSION]],
+            ['GET', '/v2/availability', $basePayload, ['cal-api-version' => self::SLOT_API_VERSION]],
+            ['GET', '/v2/event-types/' . $eventTypeId . '/slots', [
+                'start' => $start,
+                'end' => $end,
+                'timeZone' => $timezone,
+            ], ['cal-api-version' => self::SLOT_API_VERSION]],
+            ['GET', '/v2/event-types/' . $eventTypeId . '/availability', [
+                'start' => $start,
+                'end' => $end,
+                'timeZone' => $timezone,
+            ], ['cal-api-version' => self::SLOT_API_VERSION]],
         ];
 
         return $this->tryEndpoints($apiKey, $attempts, 'Availability retrieved successfully.');
@@ -71,15 +84,26 @@ class CalComBookingService
                 'email' => trim($email),
                 'timeZone' => $timezone ?: 'UTC',
             ],
-            'metadata' => [
-                'phone' => $phone ? trim($phone) : null,
-                'notes' => $notes ? trim($notes) : null,
-            ],
         ];
 
+        $metadata = [];
+        $phoneValue = trim((string) ($phone ?? ''));
+        $notesValue = trim((string) ($notes ?? ''));
+
+        if ($phoneValue !== '') {
+            $metadata['phone'] = mb_substr($phoneValue, 0, 500);
+        }
+
+        if ($notesValue !== '') {
+            $metadata['notes'] = mb_substr($notesValue, 0, 500);
+        }
+
+        if ($metadata !== []) {
+            $payload['metadata'] = $metadata;
+        }
+
         $attempts = [
-            ['POST', '/v2/bookings', $payload, ['cal-api-version' => '2024-08-13']],
-            ['POST', '/v1/bookings', $payload, []],
+            ['POST', '/v2/bookings', $payload, ['cal-api-version' => self::BOOKING_API_VERSION]],
         ];
 
         return $this->tryEndpoints($apiKey, $attempts, 'Appointment booked successfully.');
@@ -101,12 +125,12 @@ class CalComBookingService
         }
 
         $payload = [
-            'reason' => $reason ? trim($reason) : null,
+            'cancellationReason' => $reason ? trim($reason) : null,
+            'cancelSubsequentBookings' => false,
         ];
 
         $attempts = [
-            ['POST', '/v2/bookings/' . $bookingId . '/cancel', $payload, ['cal-api-version' => '2024-08-13']],
-            ['DELETE', '/v1/bookings/' . $bookingId, $payload, []],
+            ['POST', '/v2/bookings/' . $bookingId . '/cancel', $payload, ['cal-api-version' => self::BOOKING_API_VERSION]],
         ];
 
         return $this->tryEndpoints($apiKey, $attempts, 'Booking cancelled successfully.');
@@ -131,13 +155,11 @@ class CalComBookingService
 
         $payload = [
             'start' => $newStartIso,
-            'end' => $newEndIso,
-            'reason' => $reason ? trim($reason) : null,
+            'reschedulingReason' => $reason ? trim($reason) : null,
         ];
 
         $attempts = [
-            ['POST', '/v2/bookings/' . $bookingId . '/reschedule', $payload, ['cal-api-version' => '2024-08-13']],
-            ['PATCH', '/v1/bookings/' . $bookingId, $payload, []],
+            ['POST', '/v2/bookings/' . $bookingId . '/reschedule', $payload, ['cal-api-version' => self::BOOKING_API_VERSION]],
         ];
 
         return $this->tryEndpoints($apiKey, $attempts, 'Booking rescheduled successfully.');

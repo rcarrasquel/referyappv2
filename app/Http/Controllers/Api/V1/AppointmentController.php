@@ -268,6 +268,15 @@ class AppointmentController extends BaseApiController
 
         $this->assertInsideSchedule($card, $startsAt, $endsAt);
         $this->assertNoOverlap($card->id, $startsAt, $endsAt);
+        $this->assertAvailabilityForBooking($card, $startsAt);
+
+        $calBookingId = $this->createCalBookingIfEnabled($card, [
+            'full_name' => trim($validated['full_name']),
+            'email' => $this->nullableTrim($validated['email'] ?? null),
+            'phone' => $this->nullableTrim($validated['phone'] ?? null),
+            'notes' => $this->nullableTrim($validated['notes'] ?? null),
+            'starts_at' => $startsAt,
+        ]);
 
         $appointment = Appointment::query()->create([
             'user_id' => $card->user_id,
@@ -283,9 +292,8 @@ class AppointmentController extends BaseApiController
             'status' => $validated['status'] ?? 'scheduled',
             'notes' => $this->nullableTrim($validated['notes'] ?? null),
             'source' => 'dashboard_api',
+            'cal_booking_id' => $calBookingId,
         ]);
-
-        $this->syncCreateWithCal($card->user_id, $appointment);
 
         return $this->ok([
             'item' => $this->serializeAppointment($appointment->load(['card:id,name,username', 'product:id,name,duration_minutes'])),
@@ -320,6 +328,7 @@ class AppointmentController extends BaseApiController
 
         $this->assertInsideSchedule($card, $startsAt, $endsAt);
         $this->assertNoOverlap($card->id, $startsAt, $endsAt, $appointment->id);
+        $this->assertAvailabilityForBooking($card, $startsAt);
 
         $appointment->update([
             'user_id' => $card->user_id,
@@ -563,6 +572,12 @@ class AppointmentController extends BaseApiController
             && trim((string) $owner->cal_event_type_id) !== '';
     }
 
+    private function ownerTimezone(?User $owner): string
+    {
+        $tz = trim((string) ($owner?->timezone ?? ''));
+        return $tz !== '' ? $tz : (string) config('app.timezone', 'UTC');
+    }
+
     private function syncCreateWithCal(int $ownerId, Appointment $appointment): void
     {
         $owner = User::query()->find($ownerId);
@@ -570,13 +585,21 @@ class AppointmentController extends BaseApiController
             return;
         }
 
+        $ownerTimezone = $this->ownerTimezone($owner);
+        $startForCal = '';
+        if ($appointment->starts_at instanceof Carbon) {
+            $startForCal = Carbon::parse($appointment->starts_at->format('Y-m-d H:i'), $ownerTimezone)
+                ->utc()
+                ->format('Y-m-d\TH:i:s\Z');
+        }
+
         $result = app(CalComBookingService::class)->BookAppointmentCal(
             (string) $owner->cal_api_key,
             (string) $owner->cal_event_type_id,
-            $appointment->starts_at?->toIso8601String() ?: '',
+            $startForCal,
             (string) $appointment->full_name,
             (string) ($appointment->email ?: $owner->email),
-            config('app.timezone', 'UTC'),
+            $ownerTimezone,
             $appointment->phone,
             $appointment->notes,
         );
@@ -605,11 +628,19 @@ class AppointmentController extends BaseApiController
             return;
         }
 
+        $ownerTimezone = $this->ownerTimezone($owner);
+        $startForCal = Carbon::parse($appointment->starts_at?->format('Y-m-d H:i') ?: '', $ownerTimezone)
+            ->utc()
+            ->format('Y-m-d\TH:i:s\Z');
+        $endForCal = $appointment->ends_at
+            ? Carbon::parse($appointment->ends_at->format('Y-m-d H:i'), $ownerTimezone)->utc()->format('Y-m-d\TH:i:s\Z')
+            : null;
+
         $result = app(CalComBookingService::class)->RescheduleBookingCal(
             (string) $owner->cal_api_key,
             (string) $appointment->cal_booking_id,
-            $appointment->starts_at?->toIso8601String() ?: '',
-            $appointment->ends_at?->toIso8601String(),
+            $startForCal,
+            $endForCal,
             'Rescheduled from ReferyApp API'
         );
 
@@ -642,16 +673,100 @@ class AppointmentController extends BaseApiController
 
     private function extractCalBookingId(array $data): string
     {
-        $id = (string) ($data['id'] ?? $data['bookingId'] ?? '');
+        $id = (string) ($data['uid'] ?? $data['bookingUid'] ?? $data['id'] ?? $data['bookingId'] ?? '');
         if ($id !== '') {
             return $id;
         }
 
         $nested = $data['booking'] ?? null;
         if (is_array($nested)) {
-            return (string) ($nested['id'] ?? $nested['bookingId'] ?? '');
+            return (string) ($nested['uid'] ?? $nested['bookingUid'] ?? $nested['id'] ?? $nested['bookingId'] ?? '');
         }
 
         return '';
+    }
+
+    private function assertAvailabilityForBooking(Card $card, Carbon $startsAt): void
+    {
+        $owner = User::query()->find($card->user_id);
+
+        if (! $this->syncEnabledForUser($owner)) {
+            return;
+        }
+
+        $result = app(CalComBookingService::class)->CheckAvailabilityCal(
+            (string) $owner->cal_api_key,
+            (string) $owner->cal_event_type_id,
+            $startsAt->toDateString(),
+            $this->ownerTimezone($owner)
+        );
+
+        if (($result['ok'] ?? false) !== true) {
+            throw ValidationException::withMessages([
+                'appointment_time' => 'Unable to verify availability with Cal.com. Please try again.',
+            ]);
+        }
+
+        $data = is_array($result['data'] ?? null) ? $result['data'] : [];
+        $slots = [];
+        $ownerTimezone = $this->ownerTimezone($owner);
+
+        foreach ($data as $key => $value) {
+            if (is_string($key) && is_array($value)) {
+                foreach ($value as $slotRow) {
+                    if (is_array($slotRow) && isset($slotRow['start'])) {
+                        $slots[] = Carbon::parse((string) $slotRow['start'])->setTimezone($ownerTimezone)->format('H:i');
+                    }
+                }
+                continue;
+            }
+
+            if (is_array($value) && isset($value['start'])) {
+                $slots[] = Carbon::parse((string) $value['start'])->setTimezone($ownerTimezone)->format('H:i');
+            }
+        }
+
+        $selected = $startsAt->format('H:i');
+        if (! in_array($selected, $slots, true)) {
+            throw ValidationException::withMessages([
+                'appointment_time' => 'Selected time is not available.',
+            ]);
+        }
+    }
+
+    private function createCalBookingIfEnabled(Card $card, array $payload): ?string
+    {
+        $owner = User::query()->find($card->user_id);
+        if (! $this->syncEnabledForUser($owner)) {
+            return null;
+        }
+
+        $ownerTimezone = $this->ownerTimezone($owner);
+        $startForCal = '';
+        if ($payload['starts_at'] instanceof Carbon) {
+            $startForCal = Carbon::parse($payload['starts_at']->format('Y-m-d H:i'), $ownerTimezone)
+                ->utc()
+                ->format('Y-m-d\TH:i:s\Z');
+        }
+
+        $result = app(CalComBookingService::class)->BookAppointmentCal(
+            (string) $owner->cal_api_key,
+            (string) $owner->cal_event_type_id,
+            $startForCal,
+            (string) ($payload['full_name'] ?? ''),
+            (string) (($payload['email'] ?? '') ?: $owner->email),
+            $ownerTimezone,
+            (string) ($payload['phone'] ?? ''),
+            (string) ($payload['notes'] ?? ''),
+        );
+
+        if (($result['ok'] ?? false) !== true) {
+            throw ValidationException::withMessages([
+                'appointment_time' => (string) ($result['message'] ?? 'Unable to create booking in Cal.com.'),
+            ]);
+        }
+
+        $bookingId = $this->extractCalBookingId((array) ($result['data'] ?? []));
+        return $bookingId !== '' ? $bookingId : null;
     }
 }

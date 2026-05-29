@@ -71,6 +71,7 @@
                         <p v-if="form.errors.language" class="mt-1 text-xs text-rose-600">{{ form.errors.language }}</p>
                     </div>
 
+
                     <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
                         <p class="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800">
                             <KeyIcon class="h-4 w-4" />
