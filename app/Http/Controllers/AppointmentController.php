@@ -2,20 +2,19 @@
 
 namespace App\Http\Controllers;
 
-use App\Mail\PublicCardRequestNotificationMail;
+use App\Jobs\SendPublicCardRequestNotificationJob;
+use App\Jobs\SyncAppointmentToCalJob;
 use App\Models\Appointment;
 use App\Models\Card;
 use App\Models\Lead;
 use App\Models\Product;
 use App\Models\User;
 use App\Services\CalComBookingService;
-use App\Services\MailRuntimeConfigService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -163,30 +162,16 @@ class AppointmentController extends Controller
         $this->assertNoOverlap($card->id, $startsAt, $endsAt);
         $this->assertAvailabilityForBooking($card, $startsAt);
 
-        $calBookingId = $this->createCalBookingIfEnabled($card, [
-            'full_name' => trim($validated['full_name']),
-            'email' => $this->nullableTrim($validated['email'] ?? null),
-            'phone' => $this->nullableTrim($validated['phone'] ?? null),
-            'notes' => $this->nullableTrim($validated['notes'] ?? null),
-            'starts_at' => $startsAt,
-        ]);
-        //dd($calBookingId);
-        $appointment = Appointment::query()->create([
-            'user_id' => $card->user_id,
-            'card_id' => $card->id,
-            'product_id' => $product?->id,
-            'full_name' => trim($validated['full_name']),
-            'phone' => $this->nullableTrim($validated['phone'] ?? null),
-            'email' => $this->nullableTrim($validated['email'] ?? null),
-            'interest' => $this->resolveInterest($validated['interest'] ?? null, $product?->name),
-            'duration_minutes' => $duration,
-            'starts_at' => $startsAt,
-            'ends_at' => $endsAt,
-            'status' => $validated['status'] ?? 'scheduled',
-            'notes' => $this->nullableTrim($validated['notes'] ?? null),
-            'source' => 'dashboard',
-            'cal_booking_id' => $calBookingId,
-        ]);
+        $this->createAppointmentForCard(
+            $card,
+            $product,
+            $validated,
+            $startsAt,
+            $endsAt,
+            $duration,
+            'dashboard',
+            $validated['status'] ?? 'scheduled'
+        );
 
         return back()->with('status', 'Appointment created successfully.');
     }
@@ -207,7 +192,7 @@ class AppointmentController extends Controller
         ]);
 
         if ($validated['status'] === 'cancelled') {
-            $this->syncCancelWithCal($appointment);
+            $this->dispatchCalSync($appointment, 'cancel');
         }
 
         return back()->with('status', 'Appointment status updated.');
@@ -260,7 +245,7 @@ class AppointmentController extends Controller
             'notes' => $this->nullableTrim($validated['notes'] ?? null),
         ]);
 
-        $this->syncRescheduleWithCal($card->user_id, $appointment);
+        $this->dispatchCalSync($appointment, 'reschedule');
 
         return back()->with('status', 'Appointment updated successfully.');
     }
@@ -272,7 +257,7 @@ class AppointmentController extends Controller
             abort(403);
         }
 
-        $this->syncCancelWithCal($appointment);
+        $this->dispatchCalSync($appointment, 'cancel');
         $appointment->delete();
 
         return back()->with('status', 'Appointment deleted successfully.');
@@ -364,30 +349,16 @@ class AppointmentController extends Controller
         $this->assertNoOverlap($card->id, $startsAt, $endsAt);
         $this->assertAvailabilityForBooking($card, $startsAt);
 
-        $calBookingId = $this->createCalBookingIfEnabled($card, [
-            'full_name' => trim($validated['full_name']),
-            'email' => $this->nullableTrim($validated['email'] ?? null),
-            'phone' => $this->nullableTrim($validated['phone'] ?? null),
-            'notes' => $this->nullableTrim($validated['notes'] ?? null),
-            'starts_at' => $startsAt,
-        ]);
-
-        $appointment = Appointment::query()->create([
-            'user_id' => $card->user_id,
-            'card_id' => $card->id,
-            'product_id' => $product?->id,
-            'full_name' => trim($validated['full_name']),
-            'phone' => $this->nullableTrim($validated['phone'] ?? null),
-            'email' => $this->nullableTrim($validated['email'] ?? null),
-            'interest' => $this->resolveInterest($validated['interest'] ?? null, $product?->name),
-            'duration_minutes' => $duration,
-            'starts_at' => $startsAt,
-            'ends_at' => $endsAt,
-            'status' => 'scheduled',
-            'notes' => $this->nullableTrim($validated['notes'] ?? null),
-            'source' => 'public',
-            'cal_booking_id' => $calBookingId,
-        ]);
+        $appointment = $this->createAppointmentForCard(
+            $card,
+            $product,
+            $validated,
+            $startsAt,
+            $endsAt,
+            $duration,
+            'public',
+            'scheduled'
+        );
 
         $this->sendPublicRequestEmail(
             $card,
@@ -414,40 +385,22 @@ class AppointmentController extends Controller
 
         $language = in_array($owner->language, ['es', 'en'], true) ? $owner->language : 'en';
 
-        try {
-            app(MailRuntimeConfigService::class)->apply();
+        SendPublicCardRequestNotificationJob::dispatch(
+            cardId: (string) $card->id,
+            productId: (string) $product->id,
+            requestType: $requestType,
+            leadId: $lead?->id,
+            appointmentId: $appointment?->id,
+        );
 
-            Mail::to($owner->email)->send(
-                new PublicCardRequestNotificationMail(
-                    card: $card,
-                    product: $product,
-                    requestType: $requestType,
-                    ownerLanguage: $language,
-                    lead: $lead,
-                    appointment: $appointment,
-                )
-            );
-
-            Log::info('Public card request email sent', [
-                'type' => $requestType,
-                'owner_email' => $owner->email,
-                'card_id' => $card->id,
-                'card_username' => $card->username,
-                'lead_id' => $lead?->id,
-                'appointment_id' => $appointment?->id,
-            ]);
-        } catch (\Throwable $exception) {
-            Log::error('Public card request email failed', [
-                'type' => $requestType,
-                'owner_email' => $owner->email,
-                'card_id' => $card->id,
-                'card_username' => $card->username,
-                'lead_id' => $lead?->id,
-                'appointment_id' => $appointment?->id,
-                'error' => $exception->getMessage(),
-            ]);
-            report($exception);
-        }
+        Log::info('Public card request email queued', [
+            'type' => $requestType,
+            'owner_email' => $owner->email,
+            'card_id' => $card->id,
+            'card_username' => $card->username,
+            'lead_id' => $lead?->id,
+            'appointment_id' => $appointment?->id,
+        ]);
     }
 
     private function authorizeCard($user, Card $card): void
@@ -473,6 +426,67 @@ class AppointmentController extends Controller
     {
         $duration = $requestedDuration ?: ($serviceDuration ?: 30);
         return max(5, min(600, (int) $duration));
+    }
+
+    private function createAppointmentForCard(
+        Card $card,
+        ?Product $product,
+        array $payload,
+        Carbon $startsAt,
+        Carbon $endsAt,
+        int $duration,
+        string $source,
+        string $status = 'scheduled'
+    ): Appointment {
+        $owner = User::query()->find($card->user_id);
+        $calEnabled = $this->syncEnabledForUser($owner);
+
+        $appointment = Appointment::query()->create([
+            'user_id' => $card->user_id,
+            'card_id' => $card->id,
+            'product_id' => $product?->id,
+            'full_name' => trim((string) ($payload['full_name'] ?? '')),
+            'phone' => $this->nullableTrim($payload['phone'] ?? null),
+            'email' => $this->nullableTrim($payload['email'] ?? null),
+            'interest' => $this->resolveInterest($payload['interest'] ?? null, $product?->name),
+            'duration_minutes' => $duration,
+            'starts_at' => $startsAt,
+            'ends_at' => $endsAt,
+            'status' => $status,
+            'notes' => $this->nullableTrim($payload['notes'] ?? null),
+            'source' => $source,
+            'cal_booking_id' => null,
+            'cal_sync_status' => $calEnabled ? 'pending' : null,
+            'cal_sync_error' => null,
+            'cal_synced_at' => null,
+        ]);
+
+        if ($calEnabled) {
+            $this->dispatchCalSync($appointment, 'create');
+        }
+
+        return $appointment;
+    }
+
+    private function dispatchCalSync(Appointment $appointment, string $action): void
+    {
+        $owner = User::query()->find($appointment->user_id);
+        if (! $this->syncEnabledForUser($owner)) {
+            return;
+        }
+
+        $appointment->update([
+            'cal_sync_status' => 'pending',
+            'cal_sync_error' => null,
+            'cal_synced_at' => null,
+        ]);
+
+        SyncAppointmentToCalJob::dispatch(
+            (string) $appointment->id,
+            $action,
+            (int) $appointment->user_id,
+            $appointment->cal_booking_id ? (string) $appointment->cal_booking_id : null
+        );
     }
 
     private function buildDateRange(string $date, string $time, int $duration): array
@@ -597,98 +611,6 @@ class AppointmentController extends Controller
         return $tz !== '' ? $tz : (string) config('app.timezone', 'UTC');
     }
 
-    private function syncCreateWithCal(int $ownerId, Appointment $appointment): void
-    {
-        $owner = User::query()->find($ownerId);
-        if (! $this->syncEnabledForUser($owner)) {
-            return;
-        }
-
-        $ownerTimezone = $this->ownerTimezone($owner);
-        $startForCal = '';
-        if ($appointment->starts_at instanceof Carbon) {
-            $startForCal = Carbon::parse($appointment->starts_at->format('Y-m-d H:i'), $ownerTimezone)
-                ->utc()
-                ->format('Y-m-d\TH:i:s\Z');
-        }
-
-        $result = app(CalComBookingService::class)->BookAppointmentCal(
-            (string) $owner->cal_api_key,
-            (string) $owner->cal_event_type_id,
-            $startForCal,
-            (string) $appointment->full_name,
-            (string) ($appointment->email ?: $owner->email),
-            $ownerTimezone,
-            $appointment->phone,
-            $appointment->notes,
-        );
-
-        if (($result['ok'] ?? false) !== true) {
-            Log::warning('Cal.com create sync failed', ['appointment_id' => $appointment->id, 'result' => $result]);
-            return;
-        }
-
-        $bookingId = $this->extractCalBookingId($result['data'] ?? []);
-        if ($bookingId !== '') {
-            $appointment->cal_booking_id = $bookingId;
-            $appointment->save();
-        }
-    }
-
-    private function syncRescheduleWithCal(int $ownerId, Appointment $appointment): void
-    {
-        $owner = User::query()->find($ownerId);
-        if (! $this->syncEnabledForUser($owner)) {
-            return;
-        }
-
-        if (! $appointment->cal_booking_id) {
-            $this->syncCreateWithCal($ownerId, $appointment);
-            return;
-        }
-
-        $ownerTimezone = $this->ownerTimezone($owner);
-        $startForCal = Carbon::parse($appointment->starts_at?->format('Y-m-d H:i') ?: '', $ownerTimezone)
-            ->utc()
-            ->format('Y-m-d\TH:i:s\Z');
-        $endForCal = $appointment->ends_at
-            ? Carbon::parse($appointment->ends_at->format('Y-m-d H:i'), $ownerTimezone)->utc()->format('Y-m-d\TH:i:s\Z')
-            : null;
-
-        $result = app(CalComBookingService::class)->RescheduleBookingCal(
-            (string) $owner->cal_api_key,
-            (string) $appointment->cal_booking_id,
-            $startForCal,
-            $endForCal,
-            'Rescheduled from ReferyApp'
-        );
-
-        if (($result['ok'] ?? false) !== true) {
-            Log::warning('Cal.com reschedule sync failed', ['appointment_id' => $appointment->id, 'result' => $result]);
-        }
-    }
-
-    private function syncCancelWithCal(Appointment $appointment): void
-    {
-        if (! $appointment->cal_booking_id) {
-            return;
-        }
-
-        $owner = User::query()->find($appointment->user_id);
-        if (! $this->syncEnabledForUser($owner)) {
-            return;
-        }
-
-        $result = app(CalComBookingService::class)->CancelBookingCal(
-            (string) $owner->cal_api_key,
-            (string) $appointment->cal_booking_id,
-            'Cancelled from ReferyApp'
-        );
-
-        if (($result['ok'] ?? false) !== true) {
-            Log::warning('Cal.com cancel sync failed', ['appointment_id' => $appointment->id, 'result' => $result]);
-        }
-    }
 
     private function syncAvailabilityWithCal(int $ownerId, string $date): ?array
     {
@@ -733,21 +655,6 @@ class AppointmentController extends Controller
         return collect($slots)->unique('time')->sortBy('time')->values()->all();
     }
 
-    private function extractCalBookingId(array $data): string
-    {
-        $id = (string) ($data['uid'] ?? $data['bookingUid'] ?? $data['id'] ?? $data['bookingId'] ?? '');
-        if ($id !== '') {
-            return $id;
-        }
-
-        $nested = $data['booking'] ?? null;
-        if (is_array($nested)) {
-            return (string) ($nested['uid'] ?? $nested['bookingUid'] ?? $nested['id'] ?? $nested['bookingId'] ?? '');
-        }
-
-        return '';
-    }
-
     private function assertAvailabilityForBooking(Card $card, Carbon $startsAt): void
     {
         $owner = User::query()->find($card->user_id);
@@ -766,48 +673,18 @@ class AppointmentController extends Controller
         $selected = $startsAt->format('H:i');
         
         $found = collect($calSlots)->first(fn (array $slot): bool => (string) ($slot['time'] ?? '') === $selected && (bool) ($slot['available'] ?? false));
-    
+
         //dd($selected);
         if (! $found) {
-            throw ValidationException::withMessages([
-                'appointment_time' => 'Selected time is not available.',
+            Log::warning('Cal.com availability mismatch, allowing local appointment create', [
+                'card_id' => $card->id,
+                'user_id' => $card->user_id,
+                'selected' => $selected,
+                'date' => $startsAt->toDateString(),
+                'cal_slots_count' => count($calSlots),
             ]);
+            return;
         }
     }
 
-    private function createCalBookingIfEnabled(Card $card, array $payload): ?string
-    {
-        $owner = User::query()->find($card->user_id);
-        if (! $this->syncEnabledForUser($owner)) {
-            return null;
-        }
-
-        $ownerTimezone = $this->ownerTimezone($owner);
-        $startForCal = '';
-        if ($payload['starts_at'] instanceof Carbon) {
-            $startForCal = Carbon::parse($payload['starts_at']->format('Y-m-d H:i'), $ownerTimezone)
-                ->utc()
-                ->format('Y-m-d\TH:i:s\Z');
-        }
-
-        $result = app(CalComBookingService::class)->BookAppointmentCal(
-            (string) $owner->cal_api_key,
-            (string) $owner->cal_event_type_id,
-            $startForCal,
-            (string) ($payload['full_name'] ?? ''),
-            (string) (($payload['email'] ?? '') ?: $owner->email),
-            $ownerTimezone,
-            (string) ($payload['phone'] ?? ''),
-            (string) ($payload['notes'] ?? ''),
-        );
-
-        if (($result['ok'] ?? false) !== true) {
-            throw ValidationException::withMessages([
-                'appointment_time' => (string) ($result['message'] ?? 'Unable to create booking in Cal.com.'),
-            ]);
-        }
-
-        $bookingId = $this->extractCalBookingId((array) ($result['data'] ?? []));
-        return $bookingId !== '' ? $bookingId : null;
-    }
 }

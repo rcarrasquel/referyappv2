@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Jobs\SyncAppointmentToCalJob;
 use App\Models\Appointment;
 use App\Models\Card;
 use App\Models\Product;
@@ -270,13 +271,8 @@ class AppointmentController extends BaseApiController
         $this->assertNoOverlap($card->id, $startsAt, $endsAt);
         $this->assertAvailabilityForBooking($card, $startsAt);
 
-        $calBookingId = $this->createCalBookingIfEnabled($card, [
-            'full_name' => trim($validated['full_name']),
-            'email' => $this->nullableTrim($validated['email'] ?? null),
-            'phone' => $this->nullableTrim($validated['phone'] ?? null),
-            'notes' => $this->nullableTrim($validated['notes'] ?? null),
-            'starts_at' => $startsAt,
-        ]);
+        $owner = User::query()->find($card->user_id);
+        $calEnabled = $this->syncEnabledForUser($owner);
 
         $appointment = Appointment::query()->create([
             'user_id' => $card->user_id,
@@ -292,8 +288,20 @@ class AppointmentController extends BaseApiController
             'status' => $validated['status'] ?? 'scheduled',
             'notes' => $this->nullableTrim($validated['notes'] ?? null),
             'source' => 'dashboard_api',
-            'cal_booking_id' => $calBookingId,
+            'cal_booking_id' => null,
+            'cal_sync_status' => $calEnabled ? 'pending' : null,
+            'cal_sync_error' => null,
+            'cal_synced_at' => null,
         ]);
+
+        if ($calEnabled) {
+            SyncAppointmentToCalJob::dispatch(
+                (string) $appointment->id,
+                'create',
+                (int) $appointment->user_id,
+                $appointment->cal_booking_id ? (string) $appointment->cal_booking_id : null
+            );
+        }
 
         return $this->ok([
             'item' => $this->serializeAppointment($appointment->load(['card:id,name,username', 'product:id,name,duration_minutes'])),
@@ -345,7 +353,7 @@ class AppointmentController extends BaseApiController
             'notes' => $this->nullableTrim($validated['notes'] ?? null),
         ]);
 
-        $this->syncRescheduleWithCal($card->user_id, $appointment);
+        $this->dispatchCalSync($appointment, 'reschedule');
 
         return $this->ok([
             'item' => $this->serializeAppointment($appointment->fresh()->load(['card:id,name,username', 'product:id,name,duration_minutes'])),
@@ -366,7 +374,7 @@ class AppointmentController extends BaseApiController
         ]);
 
         if ($validated['status'] === 'cancelled') {
-            $this->syncCancelWithCal($appointment);
+            $this->dispatchCalSync($appointment, 'cancel');
         }
 
         return $this->ok([
@@ -378,7 +386,7 @@ class AppointmentController extends BaseApiController
     {
         $user = $this->requireBusinessOnly($request);
         $this->ensureAppointmentOwnership($user->id, $appointment, $user->role);
-        $this->syncCancelWithCal($appointment);
+        $this->dispatchCalSync($appointment, 'cancel');
         $appointment->delete();
 
         return $this->message('Appointment deleted successfully.');
@@ -578,6 +586,27 @@ class AppointmentController extends BaseApiController
         return $tz !== '' ? $tz : (string) config('app.timezone', 'UTC');
     }
 
+    private function dispatchCalSync(Appointment $appointment, string $action): void
+    {
+        $owner = User::query()->find($appointment->user_id);
+        if (! $this->syncEnabledForUser($owner)) {
+            return;
+        }
+
+        $appointment->update([
+            'cal_sync_status' => 'pending',
+            'cal_sync_error' => null,
+            'cal_synced_at' => null,
+        ]);
+
+        SyncAppointmentToCalJob::dispatch(
+            (string) $appointment->id,
+            $action,
+            (int) $appointment->user_id,
+            $appointment->cal_booking_id ? (string) $appointment->cal_booking_id : null
+        );
+    }
+
     private function syncCreateWithCal(int $ownerId, Appointment $appointment): void
     {
         $owner = User::query()->find($ownerId);
@@ -728,9 +757,14 @@ class AppointmentController extends BaseApiController
 
         $selected = $startsAt->format('H:i');
         if (! in_array($selected, $slots, true)) {
-            throw ValidationException::withMessages([
-                'appointment_time' => 'Selected time is not available.',
+            Log::warning('Cal.com API availability mismatch, allowing local appointment create', [
+                'card_id' => $card->id,
+                'user_id' => $card->user_id,
+                'selected' => $selected,
+                'date' => $startsAt->toDateString(),
+                'cal_slots_count' => count($slots),
             ]);
+            return;
         }
     }
 

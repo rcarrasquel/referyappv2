@@ -9,14 +9,17 @@ use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\VerifyEmailController;
 use App\Http\Controllers\AppointmentController;
 use App\Http\Controllers\CardController;
+use App\Http\Controllers\ClientController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LocaleController;
+use App\Http\Controllers\LoyaltyProgramController;
 use App\Http\Controllers\MailSettingsController;
 use App\Http\Controllers\ModuleController;
 use App\Http\Controllers\PublicCardController;
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\QueueMonitorController;
 use App\Http\Controllers\StripeSettingsController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -179,6 +182,14 @@ Route::middleware(['auth', 'verified', 'business'])->group(function (): void {
     Route::put('/appointments/{appointment}', [AppointmentController::class, 'update'])->name('appointments.update');
     Route::delete('/appointments/{appointment}', [AppointmentController::class, 'destroy'])->name('appointments.destroy');
     Route::put('/appointments/{appointment}/status', [AppointmentController::class, 'updateStatus'])->name('appointments.status.update');
+    Route::get('/clients', [ClientController::class, 'index'])->name('clients.index');
+    Route::post('/clients', [ClientController::class, 'store'])->name('clients.store');
+    Route::put('/clients/{client}', [ClientController::class, 'update'])->name('clients.update');
+    Route::delete('/clients/{client}', [ClientController::class, 'destroy'])->name('clients.destroy');
+    Route::get('/loyalty-programs', [LoyaltyProgramController::class, 'index'])->name('loyalty.programs.index');
+    Route::post('/loyalty-programs', [LoyaltyProgramController::class, 'store'])->name('loyalty.programs.store');
+    Route::put('/loyalty-programs/{loyaltyProgram}', [LoyaltyProgramController::class, 'update'])->name('loyalty.programs.update');
+    Route::delete('/loyalty-programs/{loyaltyProgram}', [LoyaltyProgramController::class, 'destroy'])->name('loyalty.programs.destroy');
 
     Route::get('/profile', [ProfileController::class, 'index'])->name('profile');
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
@@ -200,6 +211,11 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function (): void {
     Route::get('/mail-settings', [MailSettingsController::class, 'index'])->name('mail.settings');
     Route::put('/mail-settings', [MailSettingsController::class, 'update'])->name('mail.settings.update');
     Route::post('/mail-settings/test', [MailSettingsController::class, 'test'])->name('mail.settings.test');
+    Route::get('/queue-monitor', [QueueMonitorController::class, 'index'])->name('queue.monitor');
+    Route::post('/queue-monitor/appointments/{appointment}/retry', [QueueMonitorController::class, 'retryAppointment'])->name('queue.monitor.appointments.retry');
+    Route::delete('/queue-monitor/jobs/{jobId}', [QueueMonitorController::class, 'deleteQueuedJob'])->name('queue.monitor.jobs.delete');
+    Route::post('/queue-monitor/failed-jobs/{failedJobId}/retry', [QueueMonitorController::class, 'retryFailedJob'])->name('queue.monitor.failed.retry');
+    Route::delete('/queue-monitor/failed-jobs/{failedJobId}', [QueueMonitorController::class, 'deleteFailedJob'])->name('queue.monitor.failed.delete');
 });
 
 Route::post('/locale', LocaleController::class)->name('locale.switch');

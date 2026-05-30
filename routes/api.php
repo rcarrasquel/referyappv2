@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CardController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\LeadController;
+use App\Http\Controllers\Api\V1\LoyaltyController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\UserController;
@@ -62,5 +63,11 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/leads/{lead}', [LeadController::class, 'show']);
         Route::put('/leads/{lead}', [LeadController::class, 'update']);
         Route::delete('/leads/{lead}', [LeadController::class, 'destroy']);
+
+        Route::get('/loyalty/programs', [LoyaltyController::class, 'programs']);
+        Route::get('/loyalty/cards', [LoyaltyController::class, 'cards']);
+        Route::post('/loyalty/qr-token', [LoyaltyController::class, 'issueQrToken']);
+        Route::post('/loyalty/scan', [LoyaltyController::class, 'scanAndStamp']);
+        Route::post('/loyalty/cards/{card}/redeem', [LoyaltyController::class, 'redeem']);
     });
 });

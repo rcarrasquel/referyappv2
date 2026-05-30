@@ -30,6 +30,9 @@ class Appointment extends Model
         'notes',
         'source',
         'cal_booking_id',
+        'cal_sync_status',
+        'cal_sync_error',
+        'cal_synced_at',
     ];
 
     protected function casts(): array
@@ -38,6 +41,7 @@ class Appointment extends Model
             'starts_at' => 'datetime',
             'ends_at' => 'datetime',
             'duration_minutes' => 'integer',
+            'cal_synced_at' => 'datetime',
         ];
     }
 

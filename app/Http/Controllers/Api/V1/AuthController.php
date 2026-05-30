@@ -25,9 +25,9 @@ class AuthController extends BaseApiController
             ], 422);
         }
 
-        if (! in_array($user->role, ['business', 'admin'], true)) {
+        if (! in_array($user->role, ['business', 'admin', 'customer'], true)) {
             return response()->json([
-                'message' => 'Only business or admin users can access the mobile API.',
+                'message' => 'Only business, admin or customer users can access the mobile API.',
             ], 403);
         }
 
